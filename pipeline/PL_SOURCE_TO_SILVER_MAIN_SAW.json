@@ -47,7 +47,31 @@
 					"items": {
 						"value": "@activity('Read Table From Source').output.value",
 						"type": "Expression"
-					}
+					},
+					"activities": [
+						{
+							"name": "Ingest From Source To Silver",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "PL_SOURCE_TO_SILVER_INNER_SAW",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"table_id": {
+										"value": "@item().table_id",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					]
 				}
 			}
 		],
