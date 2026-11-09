@@ -75,6 +75,9 @@
 				}
 			}
 		],
+		"folder": {
+			"name": "SAW"
+		},
 		"annotations": []
 	}
 }
