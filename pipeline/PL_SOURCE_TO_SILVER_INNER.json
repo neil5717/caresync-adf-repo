@@ -77,7 +77,7 @@
 					"source": {
 						"type": "PostgreSqlV2Source",
 						"query": {
-							"value": "select * from PUBLIC.@{activity('Read Table Details').output.firstRow.source_table_name}",
+							"value": "select * from @{activity('Read Table Details').output.firstRow.source_schema_name}.@{activity('Read Table Details').output.firstRow.source_table_name}",
 							"type": "Expression"
 						},
 						"queryTimeout": "02:00:00"
@@ -200,7 +200,7 @@
 				}
 			},
 			{
-				"name": "Upfate Success Status",
+				"name": "Update Success Status",
 				"type": "Script",
 				"dependsOn": [
 					{
