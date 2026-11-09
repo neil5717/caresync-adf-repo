@@ -418,7 +418,7 @@
 												"type": "AzureBlobFSReadSettings",
 												"recursive": false,
 												"modifiedDatetimeStart": {
-													"value": "@activity('Read Table Details').output.firstRow.watermark_value",
+													"value": "@variables('watermark_value')",
 													"type": "Expression"
 												},
 												"deleteFilesAfterCompletion": false
