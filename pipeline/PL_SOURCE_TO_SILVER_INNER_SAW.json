@@ -119,6 +119,41 @@
 						"type": "Expression"
 					}
 				}
+			},
+			{
+				"name": "Web1",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "Copy data1",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "POST",
+					"url": {
+						"value": "https://api.fabric.microsoft.com/v1/workspaces/5aa0e28e-ab58-4dd7-91b4-0b577536312a/notebooks/df098ec8-1cf8-4bc4-ad11-ab2df1b5e8e4/jobs/execute/instances?beta=false",
+						"type": "Expression"
+					},
+					"body": {
+						"value": "@json(concat(\n'{\"executionData\":{\"compute\":\"Spark\"},\"parameters\":[\n{\"name\":\"p_source_path\",\"value\":\"Files/landing/neon_postgres/',activity('Read Table Details').output.firstRow.source_table_name,'\",\"type\":\"Text\"},\n{\"name\":\"p_target_table\",\"value\":\"',activity('Read Table Details').output.firstRow.silver_table_name,'\",\"type\":\"Text\"},\n{\"name\":\"p_load_type\",\"value\":\"',activity('Read Table Details').output.firstRow.load_type,'\",\"type\":\"Text\"}\n]}'\n))",
+						"type": "Expression"
+					},
+					"authentication": {
+						"type": "MSI",
+						"resource": "https://api.fabric.microsoft.com"
+					}
+				}
 			}
 		],
 		"parameters": {
