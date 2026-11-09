@@ -218,7 +218,7 @@
 						{
 							"type": "Query",
 							"text": {
-								"value": "UPDATE ctrl.audit_log\nset status='SUCCESS',end_time=sysutcdatetime(),\nrecords_written=activity('Get Silver Notebook Result').output\nwhere adf_run_id='@{pipeline().parameters.adf_run_id}' and table_id=@{pipeline().parameters.table_id}",
+								"value": "UPDATE ctrl.audit_log\nSET status = 'SUCCESS',\n    end_time = SYSUTCDATETIME(),\n    records_written = @{int(activity('Get Silver Notebook Result').output.properties.exitValue)}\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND table_id = @{pipeline().parameters.table_id};",
 								"type": "Expression"
 							}
 						}
