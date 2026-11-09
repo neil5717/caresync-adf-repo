@@ -48,6 +48,7 @@
 						"value": "@activity('Read Table From Source').output.value",
 						"type": "Expression"
 					},
+					"isSequential": false,
 					"activities": [
 						{
 							"name": "Ingest From Source To Silver",
@@ -103,7 +104,7 @@
 									{
 										"type": "Query",
 										"text": {
-											"value": "INSERT INTO ctrl.audit_log (adf_run_id, table_id,status,stage,start_time)\nVALUES ( pipeline().parameters.adf_run_id,@{item().table_id},'In_Progress','SOURCE_TO_SILVER',sysutcdatetime())",
+											"value": "INSERT INTO ctrl.audit_log (adf_run_id, table_id,status,stage,start_time)\nVALUES ('@{pipeline().parameters.adf_run_id}',@{item().table_id},'In_Progress','SOURCE_TO_SILVER',sysutcdatetime())",
 											"type": "Expression"
 										}
 									}
