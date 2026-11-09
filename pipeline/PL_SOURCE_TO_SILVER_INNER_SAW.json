@@ -146,7 +146,7 @@
 						"type": "Expression"
 					},
 					"body": {
-						"value": "@json(concat(\n'{\"executionData\":{\"compute\":\"Spark\"},\"parameters\":[\n{\"name\":\"p_source_path\",\"value\":\"Files/landing/neon_postgres/',activity('Read Table Details').output.firstRow.source_table_name,'\",\"type\":\"Text\"},\n{\"name\":\"p_target_table\",\"value\":\"',activity('Read Table Details').output.firstRow.silver_table_name,'\",\"type\":\"Text\"},\n{\"name\":\"p_load_type\",\"value\":\"',activity('Read Table Details').output.firstRow.load_type,'\",\"type\":\"Text\"},\n{\"name\":\"p_landing_timestamp\",\"value\":\"',variables('start_time'),'\",\"type\":\"Text\"}\n]}'\n))",
+						"value": "@json(concat(\n'{\"executionData\":{\"compute\":\"Spark\"},\"parameters\":[\n{\"name\":\"p_source_path\",\"value\":\"Files/landing/neon_postgres/',\nactivity('Read Table Details').output.firstRow.source_table_name,'/',\nvariables('start_time'),'\",\"type\":\"Text\"},\n{\"name\":\"p_target_table\",\"value\":\"',\nactivity('Read Table Details').output.firstRow.silver_table_name,'\",\"type\":\"Text\"},\n{\"name\":\"p_load_type\",\"value\":\"',\nactivity('Read Table Details').output.firstRow.load_type,'\",\"type\":\"Text\"},\n{\"name\":\"p_landing_timestamp\",\"value\":\"',\nvariables('start_time'),'\",\"type\":\"Text\"}\n]}'\n))",
 						"type": "Expression"
 					},
 					"authentication": {
