@@ -61,7 +61,7 @@
 				"type": "Until",
 				"dependsOn": [
 					{
-						"activity": "Set variable1",
+						"activity": "Web1",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -96,7 +96,7 @@
 							"typeProperties": {
 								"method": "GET",
 								"url": {
-									"value": "@variables('v_job_status_url')",
+									"value": "@concat(\n'https://api.fabric.microsoft.com/v1/workspaces/5aa0e28e-ab58-4dd7-91b4-0b577536312a/notebooks/',\nactivity('Filter1').output.Value[0].id,\n'/jobs/execute/instances/',\nactivity('Web1').output.id,\n'?beta=true'\n)",
 									"type": "Expression"
 								},
 								"authentication": {
@@ -150,30 +150,6 @@
 							}
 						}
 					]
-				}
-			},
-			{
-				"name": "Set variable1",
-				"type": "SetVariable",
-				"dependsOn": [
-					{
-						"activity": "Web1",
-						"dependencyConditions": [
-							"Succeeded"
-						]
-					}
-				],
-				"policy": {
-					"secureOutput": false,
-					"secureInput": false
-				},
-				"userProperties": [],
-				"typeProperties": {
-					"variableName": "v_job_status_url",
-					"value": {
-						"value": "@activity('Web1').output.ADFWebActivityResponseHeaders.Location",
-						"type": "Expression"
-					}
 				}
 			}
 		],
