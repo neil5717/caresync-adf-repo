@@ -43,7 +43,7 @@
 						"Content-Type": "application/json"
 					},
 					"url": {
-						"value": "https://api.fabric.microsoft.com/v1/workspaces/5aa0e28e-ab58-4dd7-91b4-0b577536312a/notebooks/@{activity('Filter1').output.Value[0].id}/jobs/execute/instances?beta=false",
+						"value": "https://api.fabric.microsoft.com/v1/workspaces/5aa0e28e-ab58-4dd7-91b4-0b577536312a/notebooks/@{activity('Filter1').output.Value[0].id}/jobs/execute/instances?jobType=RunNotebook",
 						"type": "Expression"
 					},
 					"body": {
@@ -61,7 +61,7 @@
 				"type": "Until",
 				"dependsOn": [
 					{
-						"activity": "Web1",
+						"activity": "Set variable1",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -96,7 +96,7 @@
 							"typeProperties": {
 								"method": "GET",
 								"url": {
-									"value": "https://api.fabric.microsoft.com/v1/workspaces/5aa0e28e-ab58-4dd7-91b4-0b577536312a/notebooks/@{activity('Filter1').output.Value[0].id}/jobs/execute/instances/@{activity('Web1').output.id}?beta=true",
+									"value": "@variables('v_job_status_url')",
 									"type": "Expression"
 								},
 								"authentication": {
@@ -151,6 +151,30 @@
 						}
 					]
 				}
+			},
+			{
+				"name": "Set variable1",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Web1",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "v_job_status_url",
+					"value": {
+						"value": "@activity('Web1').output.ADFWebActivityResponseHeaders.Location",
+						"type": "Expression"
+					}
+				}
 			}
 		],
 		"parameters": {
@@ -159,6 +183,11 @@
 			},
 			"p_notebooks": {
 				"type": "array"
+			}
+		},
+		"variables": {
+			"v_job_status_url": {
+				"type": "String"
 			}
 		},
 		"folder": {
