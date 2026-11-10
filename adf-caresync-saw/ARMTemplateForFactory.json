@@ -399,7 +399,7 @@
 							{
 								"activity": "Silver To Gold",
 								"dependencyConditions": [
-									"Succeeded"
+									"Completed"
 								]
 							}
 						],
