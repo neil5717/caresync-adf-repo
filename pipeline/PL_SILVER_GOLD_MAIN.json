@@ -51,7 +51,7 @@
 					"isSequential": false,
 					"activities": [
 						{
-							"name": "Execute Pipeline1",
+							"name": "Execute Gold Notebook",
 							"type": "ExecutePipeline",
 							"dependsOn": [
 								{
@@ -125,7 +125,7 @@
 							"type": "Script",
 							"dependsOn": [
 								{
-									"activity": "Execute Pipeline1",
+									"activity": "Execute Gold Notebook",
 									"dependencyConditions": [
 										"Failed"
 									]
@@ -161,7 +161,7 @@
 							"type": "Fail",
 							"dependsOn": [
 								{
-									"activity": "Execute Pipeline1",
+									"activity": "Execute Gold Notebook",
 									"dependencyConditions": [
 										"Failed"
 									]
