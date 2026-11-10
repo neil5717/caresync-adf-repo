@@ -1,0 +1,12 @@
+{
+	"name": "adf-caresync-saw",
+	"properties": {
+		"globalParameters": {
+			"email_recipient": {
+				"type": "string",
+				"value": "saw.wankhede@gmail.com"
+			}
+		}
+	},
+	"location": "centralindia"
+}
