@@ -1,0 +1,169 @@
+{
+	"name": "PL_Execute_Gold_Notebook",
+	"properties": {
+		"activities": [
+			{
+				"name": "Filter1",
+				"type": "Filter",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@pipeline().parameters.p_notebooks",
+						"type": "Expression"
+					},
+					"condition": {
+						"value": "@equals(\n    toUpper(item().displayName),\n    toUpper(concat('NB_Gold_', pipeline().parameters.p_gold_table_name))\n)",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Web1",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "Filter1",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"method": "POST",
+					"headers": {
+						"Content-Type": "application/json"
+					},
+					"url": {
+						"value": "https://api.fabric.microsoft.com/v1/workspaces/5aa0e28e-ab58-4dd7-91b4-0b577536312a/notebooks/@{activity('Filter1').output.Value[0].id}/jobs/execute/instances?beta=false",
+						"type": "Expression"
+					},
+					"body": {
+						"value": "{\n  \"executionData\": {\n    \"compute\": \"Spark\"\n  }\n}",
+						"type": "Expression"
+					},
+					"authentication": {
+						"type": "MSI",
+						"resource": "https://api.fabric.microsoft.com"
+					}
+				}
+			},
+			{
+				"name": "Until_Notebook_Completion",
+				"type": "Until",
+				"dependsOn": [
+					{
+						"activity": "Web1",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@or(\n    equals(activity('Get_Notebook_Status').output.status,'Completed'),\n    equals(activity('Get_Notebook_Status').output.status,'Failed')\n)",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "Get_Notebook_Status",
+							"type": "WebActivity",
+							"dependsOn": [
+								{
+									"activity": "Wait1",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"method": "GET",
+								"url": {
+									"value": "https://api.fabric.microsoft.com/v1/workspaces/5aa0e28e-ab58-4dd7-91b4-0b577536312a/notebooks/@{activity('Filter1').output.Value[0].id}/jobs/execute/instances/@{activity('Web1').output.id}?beta=true",
+									"type": "Expression"
+								},
+								"authentication": {
+									"type": "MSI",
+									"resource": "https://api.fabric.microsoft.com"
+								}
+							}
+						},
+						{
+							"name": "Wait1",
+							"type": "Wait",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"waitTimeInSeconds": 60
+							}
+						}
+					],
+					"timeout": ""
+				}
+			},
+			{
+				"name": "If Condition1",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "Until_Notebook_Completion",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@equals(activity('Get_Notebook_Status').output.status,'Completed')",
+						"type": "Expression"
+					},
+					"ifFalseActivities": [
+						{
+							"name": "Fail1",
+							"type": "Fail",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"message": {
+									"value": "@concat('Gold notebook failed: ', pipeline().parameters.p_gold_table_name)",
+									"type": "Expression"
+								},
+								"errorCode": "GOLD_NOTEBOOK_FAILED"
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"p_gold_table_name": {
+				"type": "string"
+			},
+			"p_notebooks": {
+				"type": "array"
+			}
+		},
+		"folder": {
+			"name": "SAW"
+		},
+		"annotations": []
+	}
+}
