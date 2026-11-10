@@ -36,7 +36,7 @@
 				"type": "ForEach",
 				"dependsOn": [
 					{
-						"activity": "Web1",
+						"activity": "Getting All Notebooks IDs",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -177,7 +177,7 @@
 				}
 			},
 			{
-				"name": "Web1",
+				"name": "Getting All Notebooks IDs",
 				"type": "WebActivity",
 				"dependsOn": [
 					{
