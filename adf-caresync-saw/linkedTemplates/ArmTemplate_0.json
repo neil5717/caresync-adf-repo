@@ -2004,7 +2004,7 @@
 						"userProperties": [],
 						"typeProperties": {
 							"pipeline": {
-								"referenceName": "PL_SOURCE_TO_SILVER_MAIN",
+								"referenceName": "PL_SOURCE_TO_SILVER_MAIN_SAW",
 								"type": "PipelineReference"
 							},
 							"waitOnCompletion": true,
@@ -2020,7 +2020,20 @@
 					{
 						"name": "Silver To Gold",
 						"type": "ExecutePipeline",
-						"dependsOn": [],
+						"dependsOn": [
+							{
+								"activity": "Source To Silver Neon Postgres",
+								"dependencyConditions": [
+									"Completed"
+								]
+							},
+							{
+								"activity": "Source To Silver ADLS Csv_copy1",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
 						"policy": {
 							"secureInput": false
 						},
@@ -2042,27 +2055,14 @@
 					{
 						"name": "Source To Silver ADLS Csv_copy1",
 						"type": "ExecutePipeline",
-						"dependsOn": [
-							{
-								"activity": "Source To Silver Neon Postgres",
-								"dependencyConditions": [
-									"Completed"
-								]
-							},
-							{
-								"activity": "Silver To Gold",
-								"dependencyConditions": [
-									"Completed"
-								]
-							}
-						],
+						"dependsOn": [],
 						"policy": {
 							"secureInput": false
 						},
 						"userProperties": [],
 						"typeProperties": {
 							"pipeline": {
-								"referenceName": "PL_SOURCE_TO_SILVER_MAIN",
+								"referenceName": "PL_SOURCE_TO_SILVER_MAIN_SAW",
 								"type": "PipelineReference"
 							},
 							"waitOnCompletion": true,
@@ -2085,7 +2085,7 @@
 				"annotations": []
 			},
 			"dependsOn": [
-				"[concat(variables('factoryId'), '/pipelines/PL_SOURCE_TO_SILVER_MAIN')]",
+				"[concat(variables('factoryId'), '/pipelines/PL_SOURCE_TO_SILVER_MAIN_SAW')]",
 				"[concat(variables('factoryId'), '/pipelines/PL_SILVER_GOLD_MAIN')]"
 			]
 		}
