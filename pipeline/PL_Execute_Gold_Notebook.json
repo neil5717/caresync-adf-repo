@@ -96,7 +96,7 @@
 							"typeProperties": {
 								"method": "GET",
 								"url": {
-									"value": "@concat(\n'https://api.fabric.microsoft.com/v1/workspaces/5aa0e28e-ab58-4dd7-91b4-0b577536312a/notebooks/',\nactivity('Filter1').output.Value[0].id,\n'/jobs/execute/instances/',\nactivity('Web1').output.id,\n'?beta=true'\n)",
+									"value": "@concat(\n'https://api.fabric.microsoft.com/v1/workspaces/5aa0e28e-ab58-4dd7-91b4-0b577536312a/notebooks/',\nactivity('Filter1').output.Value[0].id,\n'/jobs/execute/instances/',\nactivity('Run Gold Notebook').output.id,\n'?beta=true'\n)",
 									"type": "Expression"
 								},
 								"authentication": {
@@ -180,7 +180,7 @@
 						{
 							"type": "Query",
 							"text": {
-								"value": "UPDATE ctrl.audit_log\nSET status = 'SUCCESS',\n    end_time = SYSUTCDATETIME(),\n    records_written = @{int(activity('Get Silver Notebook Result').output.properties.exitValue)}\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND table_id = @{pipeline().parameters.table_id};",
+								"value": "UPDATE ctrl.audit_log\nSET status = 'SUCCESS',\n    end_time = SYSUTCDATETIME(),\n    records_written = @{int(activity('Get Gold Notebook Result').output.properties.exitValue)}\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND table_id = @{pipeline().parameters.table_id};",
 								"type": "Expression"
 							}
 						}
@@ -210,7 +210,7 @@
 				"typeProperties": {
 					"method": "GET",
 					"url": {
-						"value": "@concat(\n'https://api.fabric.microsoft.com/v1/workspaces/5aa0e28e-ab58-4dd7-91b4-0b577536312a/notebooks/e79ca744-44e8-4ccf-81ed-91beebf87004/jobs/execute/instances/',\nactivity('Run Gold Notebook').output.id,\n'?beta=true'\n)",
+						"value": "@concat(\n'https://api.fabric.microsoft.com/v1/workspaces/5aa0e28e-ab58-4dd7-91b4-0b577536312a/notebooks/',\nactivity('Filter1').output.Value[0].id,\n'/jobs/execute/instances/',\nactivity('Run Gold Notebook').output.id,\n'?beta=true'\n)",
 						"type": "Expression"
 					},
 					"authentication": {
