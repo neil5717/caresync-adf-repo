@@ -1541,7 +1541,7 @@
 			"dependsOn": []
 		},
 		{
-			"name": "[concat(parameters('factoryName'), '/pipeline1')]",
+			"name": "[concat(parameters('factoryName'), '/PL_SILVER_GOLD_MAIN')]",
 			"type": "Microsoft.DataFactory/factories/pipelines",
 			"apiVersion": "2018-06-01",
 			"properties": {
@@ -1596,9 +1596,16 @@
 							"isSequential": false,
 							"activities": [
 								{
-									"name": "Execute Pipeline1",
+									"name": "Execute Gold Notebook",
 									"type": "ExecutePipeline",
-									"dependsOn": [],
+									"dependsOn": [
+										{
+											"activity": "InSert In-Progress Status",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
 									"policy": {
 										"secureInput": false
 									},
@@ -1617,8 +1624,98 @@
 											"p_notebooks": {
 												"value": "@activity('Web1').output.value",
 												"type": "Expression"
+											},
+											"adf_run_id": {
+												"value": "@pipeline().parameters.adf_run_id",
+												"type": "Expression"
+											},
+											"table_id": {
+												"value": "@item().table_id",
+												"type": "Expression"
 											}
 										}
+									}
+								},
+								{
+									"name": "InSert In-Progress Status",
+									"type": "Script",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 2,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"linkedServiceName": {
+										"referenceName": "LS_AzureSqlDatabase",
+										"type": "LinkedServiceReference"
+									},
+									"typeProperties": {
+										"scripts": [
+											{
+												"type": "Query",
+												"text": {
+													"value": "INSERT INTO ctrl.audit_log (adf_run_id, table_id,status,stage,start_time)\nVALUES ('@{pipeline().parameters.adf_run_id}',@{item().table_id},'In_Progress','SILVER_TO_GOLD',sysutcdatetime())",
+													"type": "Expression"
+												}
+											}
+										],
+										"scriptBlockExecutionTimeout": "02:00:00"
+									}
+								},
+								{
+									"name": "Update Fail Status",
+									"type": "Script",
+									"dependsOn": [
+										{
+											"activity": "Execute Gold Notebook",
+											"dependencyConditions": [
+												"Failed"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 2,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"linkedServiceName": {
+										"referenceName": "LS_AzureSqlDatabase",
+										"type": "LinkedServiceReference"
+									},
+									"typeProperties": {
+										"scripts": [
+											{
+												"type": "Query",
+												"text": {
+													"value": "UPDATE ctrl.audit_log\nset status='FAILED',end_time=sysutcdatetime()\nwhere adf_run_id='@{pipeline().parameters.adf_run_id}' and table_id=@{item().table_id}",
+													"type": "Expression"
+												}
+											}
+										],
+										"scriptBlockExecutionTimeout": "02:00:00"
+									}
+								},
+								{
+									"name": "Fail1",
+									"type": "Fail",
+									"dependsOn": [
+										{
+											"activity": "Execute Gold Notebook",
+											"dependencyConditions": [
+												"Failed"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"message": "500",
+										"errorCode": "The inner pipeline failed"
 									}
 								}
 							]
@@ -1660,11 +1757,20 @@
 				"policy": {
 					"elapsedTimeMetric": {}
 				},
+				"parameters": {
+					"adf_run_id": {
+						"type": "string"
+					}
+				},
+				"folder": {
+					"name": "SAW"
+				},
 				"annotations": []
 			},
 			"dependsOn": [
 				"[concat(variables('factoryId'), '/datasets/DS_AzureSqlTable')]",
-				"[concat(variables('factoryId'), '/pipelines/PL_Execute_Gold_Notebook')]"
+				"[concat(variables('factoryId'), '/pipelines/PL_Execute_Gold_Notebook')]",
+				"[concat(variables('factoryId'), '/linkedServices/LS_AzureSqlDatabase')]"
 			]
 		},
 		{
@@ -1690,7 +1796,7 @@
 						}
 					},
 					{
-						"name": "Web1",
+						"name": "Run Gold Notebook",
 						"type": "WebActivity",
 						"dependsOn": [
 							{
@@ -1732,7 +1838,7 @@
 						"type": "Until",
 						"dependsOn": [
 							{
-								"activity": "Web1",
+								"activity": "Run Gold Notebook",
 								"dependencyConditions": [
 									"Succeeded"
 								]
@@ -1768,7 +1874,7 @@
 										"method": "GET",
 										"headers": {},
 										"url": {
-											"value": "@concat(\n'https://api.fabric.microsoft.com/v1/workspaces/5aa0e28e-ab58-4dd7-91b4-0b577536312a/notebooks/',\nactivity('Filter1').output.Value[0].id,\n'/jobs/execute/instances/',\nactivity('Web1').output.id,\n'?beta=true'\n)",
+											"value": "@concat(\n'https://api.fabric.microsoft.com/v1/workspaces/5aa0e28e-ab58-4dd7-91b4-0b577536312a/notebooks/',\nactivity('Filter1').output.Value[0].id,\n'/jobs/execute/instances/',\nactivity('Run Gold Notebook').output.id,\n'?beta=true'\n)",
 											"type": "Expression"
 										},
 										"authentication": {
@@ -1823,6 +1929,74 @@
 								}
 							]
 						}
+					},
+					{
+						"name": "Update Success Status",
+						"type": "Script",
+						"dependsOn": [
+							{
+								"activity": "Get Gold Notebook Result",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 2,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "LS_AzureSqlDatabase",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "Query",
+									"text": {
+										"value": "UPDATE ctrl.audit_log\nSET status = 'SUCCESS',\n    end_time = SYSUTCDATETIME(),\n    records_written = @{int(activity('Get Gold Notebook Result').output.properties.exitValue)}\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND table_id = @{pipeline().parameters.table_id};",
+										"type": "Expression"
+									}
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					},
+					{
+						"name": "Get Gold Notebook Result",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "Run Gold Notebook",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"method": "GET",
+							"headers": {},
+							"url": {
+								"value": "@concat(\n'https://api.fabric.microsoft.com/v1/workspaces/5aa0e28e-ab58-4dd7-91b4-0b577536312a/notebooks/',\nactivity('Filter1').output.Value[0].id,\n'/jobs/execute/instances/',\nactivity('Run Gold Notebook').output.id,\n'?beta=true'\n)",
+								"type": "Expression"
+							},
+							"authentication": {
+								"type": "MSI",
+								"resource": "https://api.fabric.microsoft.com"
+							}
+						}
 					}
 				],
 				"policy": {
@@ -1834,6 +2008,12 @@
 					},
 					"p_notebooks": {
 						"type": "array"
+					},
+					"adf_run_id": {
+						"type": "string"
+					},
+					"table_id": {
+						"type": "string"
 					}
 				},
 				"variables": {
@@ -1846,7 +2026,9 @@
 				},
 				"annotations": []
 			},
-			"dependsOn": []
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_AzureSqlDatabase')]"
+			]
 		}
 	]
 }
