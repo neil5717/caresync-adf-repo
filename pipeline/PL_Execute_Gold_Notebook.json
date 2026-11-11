@@ -193,7 +193,7 @@
 				"type": "WebActivity",
 				"dependsOn": [
 					{
-						"activity": "Run Gold Notebook",
+						"activity": "If Condition1",
 						"dependencyConditions": [
 							"Succeeded"
 						]
