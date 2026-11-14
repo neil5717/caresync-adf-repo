@@ -184,7 +184,10 @@
 						"type": "DatasetReference",
 						"parameters": {
 							"container": "landing",
-							"folder": "test_json"
+							"folder": {
+								"value": "@concat(\n    activity('Read Table Details').output.firstRow.source_system,\n    '/',\n    activity('Read Table Details').output.firstRow.source_table_name,\n    '/',\n    variables('start_time')\n)",
+								"type": "Expression"
+							}
 						}
 					}
 				]
