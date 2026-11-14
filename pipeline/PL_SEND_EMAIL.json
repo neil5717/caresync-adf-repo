@@ -208,6 +208,9 @@
 				"type": "String"
 			}
 		},
+		"folder": {
+			"name": "SAW"
+		},
 		"annotations": []
 	}
 }
