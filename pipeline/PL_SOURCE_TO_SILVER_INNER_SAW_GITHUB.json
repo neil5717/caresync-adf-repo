@@ -320,7 +320,7 @@
 				"typeProperties": {
 					"method": "GET",
 					"url": {
-						"value": "@concat(\n'https://api.fabric.microsoft.com/v1/workspaces/5aa0e28e-ab58-4dd7-91b4-0b577536312a/notebooks/05d8c62e-1da9-452f-853d-89706bfdb1e9/jobs/execute/instances',\nactivity('Bronze to Silver').output.id,\n'?beta=true'\n)",
+						"value": "@concat(\n'https://api.fabric.microsoft.com/v1/workspaces/5aa0e28e-ab58-4dd7-91b4-0b577536312a/notebooks/05d8c62e-1da9-452f-853d-89706bfdb1e9/jobs/execute/instances/',\nactivity('Bronze to Silver').output.id,\n'?beta=true'\n)",
 						"type": "Expression"
 					},
 					"authentication": {
