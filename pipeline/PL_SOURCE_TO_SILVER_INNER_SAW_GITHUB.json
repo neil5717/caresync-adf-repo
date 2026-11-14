@@ -172,7 +172,7 @@
 						"type": "DatasetReference",
 						"parameters": {
 							"p_relative_url": {
-								"value": "@concat(\n    'https://api.github.com/user/repos?since=',\n    formatDateTime(\n        activity('Read Watermark').output.firstRow.watermark_value,\n        'yyyy-MM-ddTHH:mm:ssZ'\n    ),\n    '&per_page=',\n    activity('Read Table Details').output.firstRow.page_size\n)",
+								"value": "@concat(\n    activity('Read Table Details').output.firstRow.source_relative_url,\n    if(\n        equals(\n            activity('Read Table Details').output.firstRow.url_parameter_strategy,\n            'SINCE_PER_PAGE'\n        ),\n        concat(\n            '?since=',\n            formatDateTime(\n                variables('watermark_value'),\n                'yyyy-MM-ddTHH:mm:ssZ'\n            ),\n            '&per_page='\n        ),\n        if(\n            equals(\n                activity('Read Table Details').output.firstRow.url_parameter_strategy,\n                'SORT_UPDATED'\n            ),\n            '?sort=updated&direction=desc&per_page=',\n            '?per_page='\n        )\n    ),\n    activity('Read Table Details').output.firstRow.page_size\n)",
 								"type": "Expression"
 							}
 						}
