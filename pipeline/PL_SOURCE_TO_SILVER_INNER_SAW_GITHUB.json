@@ -172,7 +172,7 @@
 						"type": "DatasetReference",
 						"parameters": {
 							"p_relative_url": {
-								"value": "@activity('Read Table Details').output.firstRow.source_relative_url",
+								"value": "@concat(\n    activity('Read Table Details').output.firstRow.source_relative_url,\n    '?since=',\n    activity('Read Watermark').output.firstRow.watermark_value\n)",
 								"type": "Expression"
 							}
 						}
