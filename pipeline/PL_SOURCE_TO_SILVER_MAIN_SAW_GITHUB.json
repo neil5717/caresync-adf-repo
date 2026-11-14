@@ -1,0 +1,187 @@
+{
+	"name": "PL_SOURCE_TO_SILVER_MAIN_SAW_GITHUB",
+	"properties": {
+		"activities": [
+			{
+				"name": "Read Table From Source",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "select table_id from dbo.table_config where is_active=1 and source_system='@{pipeline().parameters.source_system}'",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "DS_FabricSQL_ProcessDB",
+						"type": "DatasetReference"
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "Ingest All Table",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Read Table From Source",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Read Table From Source').output.value",
+						"type": "Expression"
+					},
+					"isSequential": false,
+					"activities": [
+						{
+							"name": "Ingest From Source To Silver",
+							"type": "ExecutePipeline",
+							"dependsOn": [
+								{
+									"activity": "InSert In-Progress Status",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "PL_SOURCE_TO_SILVER_INNER_SAW_GITHUB",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": true,
+								"parameters": {
+									"table_id": {
+										"value": "@item().table_id",
+										"type": "Expression"
+									},
+									"adf_run_id": {
+										"value": "@pipeline().parameters.adf_run_id",
+										"type": "Expression"
+									}
+								}
+							}
+						},
+						{
+							"name": "InSert In-Progress Status",
+							"type": "Script",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 2,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "LS_FabricSQL_ProcessDB",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "Query",
+										"text": {
+											"value": "INSERT INTO dbo.audit_log (adf_run_id, table_id,status,stage,start_time)\nVALUES ('@{pipeline().parameters.adf_run_id}',@{item().table_id},'In_Progress','SOURCE_TO_SILVER',sysutcdatetime())",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "02:00:00"
+							}
+						},
+						{
+							"name": "Update Fail Status",
+							"type": "Script",
+							"dependsOn": [
+								{
+									"activity": "Ingest From Source To Silver",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 2,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "LS_AzureSqlDatabase",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "Query",
+										"text": {
+											"value": "UPDATE ctrl.audit_log\nset status='FAILED',end_time=sysutcdatetime()\nwhere adf_run_id='@{pipeline().parameters.adf_run_id}' and table_id=@{item().table_id}",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "02:00:00"
+							}
+						},
+						{
+							"name": "Fail1",
+							"type": "Fail",
+							"dependsOn": [
+								{
+									"activity": "Ingest From Source To Silver",
+									"dependencyConditions": [
+										"Failed"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"message": "500",
+								"errorCode": "The inner pipeline failed"
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"source_system": {
+				"type": "string",
+				"defaultValue": "GitHub"
+			},
+			"adf_run_id": {
+				"type": "string",
+				"defaultValue": "a99"
+			}
+		},
+		"folder": {
+			"name": "SAW_GITHUB"
+		},
+		"annotations": []
+	}
+}
