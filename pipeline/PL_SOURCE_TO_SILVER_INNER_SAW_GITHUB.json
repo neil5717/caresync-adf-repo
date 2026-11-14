@@ -195,6 +195,8 @@
 			{
 				"name": "Landing to Bronze",
 				"type": "WebActivity",
+				"state": "Inactive",
+				"onInactiveMarkAs": "Succeeded",
 				"dependsOn": [
 					{
 						"activity": "Source To Landing Ingestion",
@@ -230,6 +232,8 @@
 			{
 				"name": "Bronze to Silver",
 				"type": "WebActivity",
+				"state": "Inactive",
+				"onInactiveMarkAs": "Succeeded",
 				"dependsOn": [
 					{
 						"activity": "Landing to Bronze",
@@ -265,6 +269,8 @@
 			{
 				"name": "Update Success Status",
 				"type": "Script",
+				"state": "Inactive",
+				"onInactiveMarkAs": "Succeeded",
 				"dependsOn": [
 					{
 						"activity": "Get Silver Notebook Result",
@@ -301,6 +307,8 @@
 			{
 				"name": "Get Silver Notebook Result",
 				"type": "WebActivity",
+				"state": "Inactive",
+				"onInactiveMarkAs": "Succeeded",
 				"dependsOn": [
 					{
 						"activity": "Bronze to Silver",
@@ -361,6 +369,8 @@
 			{
 				"name": "Update Watermark Column",
 				"type": "Script",
+				"state": "Inactive",
+				"onInactiveMarkAs": "Succeeded",
 				"dependsOn": [
 					{
 						"activity": "Get Silver Notebook Result",
