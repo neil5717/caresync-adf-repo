@@ -139,7 +139,7 @@
 				],
 				"policy": {
 					"timeout": "0.12:00:00",
-					"retry": 0,
+					"retry": 3,
 					"retryIntervalInSeconds": 30,
 					"secureOutput": false,
 					"secureInput": false
@@ -172,7 +172,7 @@
 						"type": "DatasetReference",
 						"parameters": {
 							"p_relative_url": {
-								"value": "@concat(\n    activity('Read Table Details').output.firstRow.source_relative_url,\n    '?sort=updated&direction=desc&since=',\n    formatDateTime(\n        activity('Read Watermark').output.firstRow.watermark_value,\n        'yyyy-MM-ddTHH:mm:ssZ'\n    )\n)",
+								"value": "@concat(\n    activity('Read Table Details').output.firstRow.source_relative_url,\n    '?since=',\n    formatDateTime(\n        activity('Read Watermark').output.firstRow.watermark_value,\n        'yyyy-MM-ddTHH:mm:ssZ'\n    ),\n    '&per_page=',\n    activity('Read Table Details').output.firstRow.page_size\n)",
 								"type": "Expression"
 							}
 						}
