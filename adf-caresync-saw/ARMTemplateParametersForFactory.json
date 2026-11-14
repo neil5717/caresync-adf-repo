@@ -5,6 +5,9 @@
 		"factoryName": {
 			"value": "adf-caresync-saw"
 		},
+		"LS_FabricSQL_ProcessDB_servicePrincipalCredential": {
+			"value": ""
+		},
 		"LS_ADLS_properties_typeProperties_url": {
 			"value": "https://caresyncprojectsaw.dfs.core.windows.net/"
 		},
@@ -19,6 +22,18 @@
 		},
 		"LS_AzureSqlDatabase_properties_typeProperties_userName": {
 			"value": "caresyncadmin"
+		},
+		"LS_FabricSQL_ProcessDB_properties_typeProperties_server": {
+			"value": "2p4owdoa7nbevnwili4df7envi-r3rkawsyvplu3enubnlxknrrfi.datawarehouse.fabric.microsoft.com"
+		},
+		"LS_FabricSQL_ProcessDB_properties_typeProperties_database": {
+			"value": "ProcessDB"
+		},
+		"LS_FabricSQL_ProcessDB_properties_typeProperties_servicePrincipalId": {
+			"value": "991dc376-7920-4dc6-b784-f5bebb576e6e"
+		},
+		"LS_FabricSQL_ProcessDB_properties_typeProperties_tenant": {
+			"value": "0debf8d3-fbc0-4a42-b6c8-5a3832fc8daa"
 		},
 		"LS_KeyVoult_properties_typeProperties_baseUrl": {
 			"value": "https://caresync-kv-saw.vault.azure.net/"

@@ -7,6 +7,10 @@
 			"metadata": "Data Factory name",
 			"defaultValue": "adf-caresync-saw"
 		},
+		"LS_FabricSQL_ProcessDB_servicePrincipalCredential": {
+			"type": "secureString",
+			"metadata": "Secure string for 'servicePrincipalCredential' of 'LS_FabricSQL_ProcessDB'"
+		},
 		"LS_ADLS_properties_typeProperties_url": {
 			"type": "string",
 			"defaultValue": "https://caresyncprojectsaw.dfs.core.windows.net/"
@@ -26,6 +30,22 @@
 		"LS_AzureSqlDatabase_properties_typeProperties_userName": {
 			"type": "string",
 			"defaultValue": "caresyncadmin"
+		},
+		"LS_FabricSQL_ProcessDB_properties_typeProperties_server": {
+			"type": "string",
+			"defaultValue": "2p4owdoa7nbevnwili4df7envi-r3rkawsyvplu3enubnlxknrrfi.datawarehouse.fabric.microsoft.com"
+		},
+		"LS_FabricSQL_ProcessDB_properties_typeProperties_database": {
+			"type": "string",
+			"defaultValue": "ProcessDB"
+		},
+		"LS_FabricSQL_ProcessDB_properties_typeProperties_servicePrincipalId": {
+			"type": "string",
+			"defaultValue": "991dc376-7920-4dc6-b784-f5bebb576e6e"
+		},
+		"LS_FabricSQL_ProcessDB_properties_typeProperties_tenant": {
+			"type": "string",
+			"defaultValue": "0debf8d3-fbc0-4a42-b6c8-5a3832fc8daa"
 		},
 		"LS_KeyVoult_properties_typeProperties_baseUrl": {
 			"type": "string",
@@ -652,6 +672,9 @@
 					"Body_footer": {
 						"type": "String"
 					}
+				},
+				"folder": {
+					"name": "SAW"
 				},
 				"annotations": []
 			},
@@ -2300,6 +2323,29 @@
 			"dependsOn": [
 				"[concat(variables('factoryId'), '/linkedServices/LS_KeyVoult')]"
 			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LS_FabricSQL_ProcessDB')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureSqlDatabase",
+				"typeProperties": {
+					"server": "[parameters('LS_FabricSQL_ProcessDB_properties_typeProperties_server')]",
+					"database": "[parameters('LS_FabricSQL_ProcessDB_properties_typeProperties_database')]",
+					"encrypt": "mandatory",
+					"trustServerCertificate": false,
+					"authenticationType": "ServicePrincipal",
+					"servicePrincipalId": "[parameters('LS_FabricSQL_ProcessDB_properties_typeProperties_servicePrincipalId')]",
+					"servicePrincipalCredential": {
+						"type": "SecureString",
+						"value": "[parameters('LS_FabricSQL_ProcessDB_servicePrincipalCredential')]"
+					},
+					"tenant": "[parameters('LS_FabricSQL_ProcessDB_properties_typeProperties_tenant')]"
+				}
+			},
+			"dependsOn": []
 		},
 		{
 			"name": "[concat(parameters('factoryName'), '/LS_KeyVoult')]",

@@ -7,6 +7,10 @@
 			"metadata": "Data Factory name",
 			"defaultValue": "adf-caresync-saw"
 		},
+		"LS_FabricSQL_ProcessDB_servicePrincipalCredential": {
+			"type": "secureString",
+			"metadata": "Secure string for 'servicePrincipalCredential' of 'LS_FabricSQL_ProcessDB'"
+		},
 		"LS_ADLS_properties_typeProperties_url": {
 			"type": "string",
 			"defaultValue": "https://caresyncprojectsaw.dfs.core.windows.net/"
@@ -26,6 +30,22 @@
 		"LS_AzureSqlDatabase_properties_typeProperties_userName": {
 			"type": "string",
 			"defaultValue": "caresyncadmin"
+		},
+		"LS_FabricSQL_ProcessDB_properties_typeProperties_server": {
+			"type": "string",
+			"defaultValue": "2p4owdoa7nbevnwili4df7envi-r3rkawsyvplu3enubnlxknrrfi.datawarehouse.fabric.microsoft.com"
+		},
+		"LS_FabricSQL_ProcessDB_properties_typeProperties_database": {
+			"type": "string",
+			"defaultValue": "ProcessDB"
+		},
+		"LS_FabricSQL_ProcessDB_properties_typeProperties_servicePrincipalId": {
+			"type": "string",
+			"defaultValue": "991dc376-7920-4dc6-b784-f5bebb576e6e"
+		},
+		"LS_FabricSQL_ProcessDB_properties_typeProperties_tenant": {
+			"type": "string",
+			"defaultValue": "0debf8d3-fbc0-4a42-b6c8-5a3832fc8daa"
 		},
 		"LS_KeyVoult_properties_typeProperties_baseUrl": {
 			"type": "string",
@@ -70,8 +90,23 @@
 					"factoryName": {
 						"value": "[parameters('factoryName')]"
 					},
+					"LS_FabricSQL_ProcessDB_servicePrincipalCredential": {
+						"value": "[parameters('LS_FabricSQL_ProcessDB_servicePrincipalCredential')]"
+					},
 					"LS_ADLS_properties_typeProperties_url": {
 						"value": "[parameters('LS_ADLS_properties_typeProperties_url')]"
+					},
+					"LS_FabricSQL_ProcessDB_properties_typeProperties_server": {
+						"value": "[parameters('LS_FabricSQL_ProcessDB_properties_typeProperties_server')]"
+					},
+					"LS_FabricSQL_ProcessDB_properties_typeProperties_database": {
+						"value": "[parameters('LS_FabricSQL_ProcessDB_properties_typeProperties_database')]"
+					},
+					"LS_FabricSQL_ProcessDB_properties_typeProperties_servicePrincipalId": {
+						"value": "[parameters('LS_FabricSQL_ProcessDB_properties_typeProperties_servicePrincipalId')]"
+					},
+					"LS_FabricSQL_ProcessDB_properties_typeProperties_tenant": {
+						"value": "[parameters('LS_FabricSQL_ProcessDB_properties_typeProperties_tenant')]"
 					},
 					"LS_KeyVoult_properties_typeProperties_baseUrl": {
 						"value": "[parameters('LS_KeyVoult_properties_typeProperties_baseUrl')]"
