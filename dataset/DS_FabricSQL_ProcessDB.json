@@ -1,0 +1,118 @@
+{
+	"name": "DS_FabricSQL_ProcessDB",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "LS_FabricSQL_ProcessDB",
+			"type": "LinkedServiceReference"
+		},
+		"annotations": [],
+		"type": "AzureSqlTable",
+		"schema": [
+			{
+				"name": "table_id",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "source_system",
+				"type": "varchar"
+			},
+			{
+				"name": "source_schema_name",
+				"type": "varchar"
+			},
+			{
+				"name": "source_table_name",
+				"type": "varchar"
+			},
+			{
+				"name": "source_file_format",
+				"type": "varchar"
+			},
+			{
+				"name": "source_path",
+				"type": "varchar"
+			},
+			{
+				"name": "bronze_table_name",
+				"type": "varchar"
+			},
+			{
+				"name": "silver_table_name",
+				"type": "varchar"
+			},
+			{
+				"name": "gold_table_name",
+				"type": "varchar"
+			},
+			{
+				"name": "load_type",
+				"type": "varchar"
+			},
+			{
+				"name": "watermark_column",
+				"type": "varchar"
+			},
+			{
+				"name": "merge_keys",
+				"type": "varchar"
+			},
+			{
+				"name": "stage",
+				"type": "varchar"
+			},
+			{
+				"name": "source_base_url",
+				"type": "varchar"
+			},
+			{
+				"name": "source_relative_url",
+				"type": "varchar"
+			},
+			{
+				"name": "source_http_method",
+				"type": "varchar"
+			},
+			{
+				"name": "source_api_params",
+				"type": "varchar"
+			},
+			{
+				"name": "pagination_type",
+				"type": "varchar"
+			},
+			{
+				"name": "page_size",
+				"type": "int",
+				"precision": 10
+			},
+			{
+				"name": "auth_secret_name",
+				"type": "varchar"
+			},
+			{
+				"name": "is_active",
+				"type": "bit"
+			},
+			{
+				"name": "created_timestamp",
+				"type": "datetime2",
+				"scale": 6
+			},
+			{
+				"name": "updated_timestamp",
+				"type": "datetime2",
+				"scale": 6
+			},
+			{
+				"name": "MSSQL_System_Uniquifier_1893581784",
+				"type": "bigint",
+				"precision": 19
+			}
+		],
+		"typeProperties": {
+			"schema": "dbo",
+			"table": "table_config"
+		}
+	}
+}
