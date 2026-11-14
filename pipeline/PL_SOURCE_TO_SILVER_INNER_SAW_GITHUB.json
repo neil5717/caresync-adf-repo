@@ -290,7 +290,7 @@
 						{
 							"type": "Query",
 							"text": {
-								"value": "UPDATE dbo.audit_log\nSET status = 'SUCCESS',\n    end_time = SYSUTCDATETIME(),\n    records_read=@{activity('Source To Landing Ingestion').output.rowsRead},\n    records_written = @{int(activity('Get Silver Notebook Result').output.properties.exitValue)}\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND table_id = @{pipeline().parameters.table_id};",
+								"value": "UPDATE dbo.audit_log\nSET status = 'SUCCESS',\n    end_time = SYSUTCDATETIME(),\n    records_read = @{activity('Source To Landing Ingestion').output.rowsRead},\n    records_written = @{int(coalesce(activity('Get Silver Notebook Result').output.properties.exitValue,'0'))}\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND table_id = @{pipeline().parameters.table_id};",
 								"type": "Expression"
 							}
 						}
