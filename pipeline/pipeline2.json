@@ -1,0 +1,172 @@
+{
+	"name": "pipeline2",
+	"properties": {
+		"activities": [
+			{
+				"name": "Read Table Details",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 2,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "select * from dbo.table_config where table_id=@{pipeline().parameters.table_id}",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "DS_FabricSQL_ProcessDB",
+						"type": "DatasetReference"
+					}
+				}
+			},
+			{
+				"name": "Set variable1",
+				"type": "SetVariable",
+				"dependsOn": [
+					{
+						"activity": "Check Load Type",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "p_relative_url",
+					"value": {
+						"value": "@concat(\n    activity('Read Table Details').output.firstRow.source_relative_url,\n    if(\n        equals(\n            activity('Read Table Details').output.firstRow.url_parameter_strategy,\n            'SINCE_PER_PAGE'\n        ),\n        concat(\n            '?since=',\n            formatDateTime(variables('watermark_value'), 'yyyy-MM-ddTHH:mm:ssZ'),\n            '&',\n            activity('Read Table Details').output.firstRow.source_api_params\n        ),\n        if(\n            equals(\n                activity('Read Table Details').output.firstRow.url_parameter_strategy,\n                'SORT_UPDATED'\n            ),\n            concat(\n                '?sort=updated&direction=desc&',\n                activity('Read Table Details').output.firstRow.source_api_params\n            ),\n            concat(\n                '?',\n                activity('Read Table Details').output.firstRow.source_api_params\n            )\n        )\n    )\n)",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Set Start Time",
+				"type": "SetVariable",
+				"dependsOn": [],
+				"policy": {
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"variableName": "start_time",
+					"value": {
+						"value": "@formatDateTime(utcNow(),'yyyy-MM-dd_hh:mm:ss')",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Check Load Type",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "Set Start Time",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Read Table Details",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@not(equals(activity('Read Table Details').output.firstRow.load_type,'FULL' ))",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "Read Watermark",
+							"type": "Lookup",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderQuery": {
+										"value": "select watermark_value from dbo.watermark where table_id=@{pipeline().parameters.table_id}",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "DS_FabricSQL_ProcessDB",
+									"type": "DatasetReference"
+								}
+							}
+						},
+						{
+							"name": "Store Watermark Value",
+							"type": "SetVariable",
+							"dependsOn": [
+								{
+									"activity": "Read Watermark",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"variableName": "watermark_value",
+								"value": {
+									"value": "@activity('Read Watermark').output.firstRow.watermark_value",
+									"type": "Expression"
+								}
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"table_id": {
+				"type": "int"
+			}
+		},
+		"variables": {
+			"p_relative_url": {
+				"type": "String"
+			},
+			"watermark_value": {
+				"type": "String"
+			},
+			"start_time": {
+				"type": "String"
+			}
+		},
+		"annotations": []
+	}
+}
