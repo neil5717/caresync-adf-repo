@@ -11,6 +11,10 @@
 			"type": "secureString",
 			"metadata": "Secure string for 'servicePrincipalCredential' of 'LS_FabricSQL_ProcessDB'"
 		},
+		"LS_JSON_accountKey": {
+			"type": "secureString",
+			"metadata": "Secure string for 'accountKey' of 'LS_JSON'"
+		},
 		"LS_ADLS_properties_typeProperties_url": {
 			"type": "string",
 			"defaultValue": "https://caresyncprojectsaw.dfs.core.windows.net/"
@@ -33,11 +37,11 @@
 		},
 		"LS_FabricSQL_ProcessDB_properties_typeProperties_server": {
 			"type": "string",
-			"defaultValue": "2p4owdoa7nbevnwili4df7envi-r3rkawsyvplu3enubnlxknrrfi.datawarehouse.fabric.microsoft.com"
+			"defaultValue": "2p4owdoa7nbevnwili4df7envi-r3rkawsyvplu3enubnlxknrrfi.database.fabric.microsoft.com,1433"
 		},
 		"LS_FabricSQL_ProcessDB_properties_typeProperties_database": {
 			"type": "string",
-			"defaultValue": "ProcessDB"
+			"defaultValue": "ProcessDB-4ab20bbb-f4af-4aac-8114-9b9d807a6128"
 		},
 		"LS_FabricSQL_ProcessDB_properties_typeProperties_servicePrincipalId": {
 			"type": "string",
@@ -46,6 +50,10 @@
 		"LS_FabricSQL_ProcessDB_properties_typeProperties_tenant": {
 			"type": "string",
 			"defaultValue": "0debf8d3-fbc0-4a42-b6c8-5a3832fc8daa"
+		},
+		"LS_JSON_properties_typeProperties_url": {
+			"type": "string",
+			"defaultValue": "https://caresyncprojectsaw.dfs.core.windows.net/"
 		},
 		"LS_KeyVoult_properties_typeProperties_baseUrl": {
 			"type": "string",
@@ -62,6 +70,10 @@
 		"LS_PostgreSQL_properties_typeProperties_username": {
 			"type": "string",
 			"defaultValue": "neondb_owner"
+		},
+		"LS_RestAPI_properties_typeProperties_url": {
+			"type": "string",
+			"defaultValue": "https://api.github.com"
 		},
 		"containerUri": {
 			"type": "string",
@@ -93,6 +105,9 @@
 					"LS_FabricSQL_ProcessDB_servicePrincipalCredential": {
 						"value": "[parameters('LS_FabricSQL_ProcessDB_servicePrincipalCredential')]"
 					},
+					"LS_JSON_accountKey": {
+						"value": "[parameters('LS_JSON_accountKey')]"
+					},
 					"LS_ADLS_properties_typeProperties_url": {
 						"value": "[parameters('LS_ADLS_properties_typeProperties_url')]"
 					},
@@ -108,8 +123,14 @@
 					"LS_FabricSQL_ProcessDB_properties_typeProperties_tenant": {
 						"value": "[parameters('LS_FabricSQL_ProcessDB_properties_typeProperties_tenant')]"
 					},
+					"LS_JSON_properties_typeProperties_url": {
+						"value": "[parameters('LS_JSON_properties_typeProperties_url')]"
+					},
 					"LS_KeyVoult_properties_typeProperties_baseUrl": {
 						"value": "[parameters('LS_KeyVoult_properties_typeProperties_baseUrl')]"
+					},
+					"LS_RestAPI_properties_typeProperties_url": {
+						"value": "[parameters('LS_RestAPI_properties_typeProperties_url')]"
 					},
 					"LS_AzureDatabricks_properties_typeProperties_existingClusterId": {
 						"value": "[parameters('LS_AzureDatabricks_properties_typeProperties_existingClusterId')]"
@@ -135,6 +156,26 @@
 				}
 			},
 			"dependsOn": []
+		},
+		{
+			"name": "adf-caresync-saw_ArmTemplate_1",
+			"type": "Microsoft.Resources/deployments",
+			"apiVersion": "2024-03-01",
+			"properties": {
+				"mode": "incremental",
+				"templateLink": {
+					"uri": "[concat(parameters('containerUri'), '/ArmTemplate_1.json', parameters('containerSasToken'))]",
+					"contentVersion": "1.0.0.0"
+				},
+				"parameters": {
+					"factoryName": {
+						"value": "[parameters('factoryName')]"
+					}
+				}
+			},
+			"dependsOn": [
+				"[resourceId('Microsoft.Resources/deployments', 'adf-caresync-saw_ArmTemplate_0')]"
+			]
 		}
 	]
 }
