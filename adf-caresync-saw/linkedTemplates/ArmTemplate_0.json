@@ -47,6 +47,10 @@
 			"type": "string",
 			"defaultValue": "https://api.github.com"
 		},
+		"LS_RefreshAPI_properties_typeProperties_baseUrl": {
+			"type": "string",
+			"defaultValue": "https://caresync-kv-saw.vault.azure.net/"
+		},
 		"LS_AzureDatabricks_properties_typeProperties_existingClusterId": {
 			"type": "string",
 			"defaultValue": "1105-230709-1v7dvue3"
@@ -157,6 +161,19 @@
 					"url": "[parameters('LS_RestAPI_properties_typeProperties_url')]",
 					"enableServerCertificateValidation": true,
 					"authenticationType": "Anonymous"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/LS_RefreshAPI')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureKeyVault",
+				"typeProperties": {
+					"baseUrl": "[parameters('LS_RefreshAPI_properties_typeProperties_baseUrl')]"
 				}
 			},
 			"dependsOn": []
@@ -1021,7 +1038,7 @@
 			]
 		},
 		{
-			"name": "[concat(parameters('factoryName'), '/PL_SEND_EMAIL')]",
+			"name": "[concat(parameters('factoryName'), '/PL_SEND_EMAIL_GITHUB')]",
 			"type": "Microsoft.DataFactory/factories/pipelines",
 			"apiVersion": "2018-06-01",
 			"properties": {
@@ -1042,7 +1059,7 @@
 							"source": {
 								"type": "AzureSqlSource",
 								"sqlReaderQuery": {
-									"value": "select * from dbo.audit_log where adf_run_id='@{pipeline().parameters.adf_run_id}'",
+									"value": "select * from dbo.audit_log where adf_run_id='@{pipeline().parameters.adf_run_id}' ORDER BY table_id ASC;",
 									"type": "Expression"
 								},
 								"queryTimeout": "02:00:00",
@@ -1238,7 +1255,7 @@
 					}
 				},
 				"folder": {
-					"name": "SAW"
+					"name": "SAW_GITHUB"
 				},
 				"annotations": []
 			},
@@ -1887,24 +1904,6 @@
 			},
 			"dependsOn": [
 				"[concat(variables('factoryId'), '/datasets/DS_FabricSQL_ProcessDB')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/DS_AzureSqlTable')]",
-			"type": "Microsoft.DataFactory/factories/datasets",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"linkedServiceName": {
-					"referenceName": "LS_AzureSqlDatabase",
-					"type": "LinkedServiceReference"
-				},
-				"annotations": [],
-				"type": "AzureSqlTable",
-				"schema": [],
-				"typeProperties": {}
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/linkedServices/LS_AzureSqlDatabase')]"
 			]
 		}
 	]

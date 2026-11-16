@@ -55,6 +55,9 @@
 		},
 		"LS_RestAPI_properties_typeProperties_url": {
 			"value": "https://api.github.com"
+		},
+		"LS_RefreshAPI_properties_typeProperties_baseUrl": {
+			"value": "https://caresync-kv-saw.vault.azure.net/"
 		}
 	}
 }

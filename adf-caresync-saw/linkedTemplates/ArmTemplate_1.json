@@ -13,6 +13,22 @@
 	},
 	"resources": [
 		{
+			"name": "[concat(parameters('factoryName'), '/DS_AzureSqlTable')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_AzureSqlDatabase",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [],
+				"typeProperties": {}
+			},
+			"dependsOn": []
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/DS_PostgreSql')]",
 			"type": "Microsoft.DataFactory/factories/datasets",
 			"apiVersion": "2018-06-01",
@@ -261,6 +277,97 @@
 			"dependsOn": []
 		},
 		{
+			"name": "[concat(parameters('factoryName'), '/PL_DATASET_REFRESH')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "Lookup_API_Body",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": "SELECT\n    JSON_QUERY(\n        '[' +\n        STRING_AGG(\n            CAST(\n                '{\"table\":\"' + TableName +\n                '\",\"partition\":\"' + PartitionName + '\"}'\n                AS NVARCHAR(MAX)\n            ),\n            ','\n        ) +\n        ']'\n    ) AS APIBody\nFROM dbo.PowerBIRefreshConfig\nWHERE DatasetID = 'b8aa8fb0-bed3-4f28-ba20-8ca0d114d5e0'\n  AND RunFlag = 1;",
+								"queryTimeout": "02:00:00",
+								"partitionOption": "None"
+							},
+							"dataset": {
+								"referenceName": "DS_FabricSQL_ProcessDB",
+								"type": "DatasetReference",
+								"parameters": {}
+							}
+						}
+					},
+					{
+						"name": "Dataset Refresh",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "Lookup_API_Body",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"method": "POST",
+							"headers": {
+								"Content-Type": "application/json"
+							},
+							"url": {
+								"value": "@concat(\n'https://api.powerbi.com/v1.0/myorg/groups/',\n'5aa0e28e-ab58-4dd7-91b4-0b577536312a',\n'/datasets/',\n'b8aa8fb0-bed3-4f28-ba20-8ca0d114d5e0',\n'/refreshes'\n)",
+								"type": "Expression"
+							},
+							"body": {
+								"value": "{\n  \"type\": \"full\",\n  \"commitMode\": \"transactional\",\n  \"maxParallelism\": 300,\n  \"retryCount\": 1,\n  \"objects\": @{activity('Lookup_API_Body').output.firstRow.APIBody}\n}",
+								"type": "Expression"
+							},
+							"authentication": {
+								"type": "ServicePrincipal",
+								"userTenant": "0debf8d3-fbc0-4a42-b6c8-5a3832fc8daa",
+								"username": "991dc376-7920-4dc6-b784-f5bebb576e6e",
+								"resource": "https://analysis.windows.net/powerbi/api",
+								"password": {
+									"type": "AzureKeyVaultSecret",
+									"store": {
+										"referenceName": "LS_KeyVoult",
+										"type": "LinkedServiceReference"
+									},
+									"secretName": "datasetrefreshapi"
+								}
+							}
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"folder": {
+					"name": "SAW_GITHUB"
+				},
+				"annotations": []
+			},
+			"dependsOn": []
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/PL_SILVER_GOLD_MAIN')]",
 			"type": "Microsoft.DataFactory/factories/pipelines",
 			"apiVersion": "2018-06-01",
@@ -487,7 +594,9 @@
 				},
 				"annotations": []
 			},
-			"dependsOn": []
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/DS_AzureSqlTable')]"
+			]
 		},
 		{
 			"name": "[concat(parameters('factoryName'), '/PL_SOURCE_TO_SILVER_INNER')]",
@@ -751,6 +860,7 @@
 				"annotations": []
 			},
 			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/DS_AzureSqlTable')]",
 				"[concat(variables('factoryId'), '/datasets/DS_PostgreSql')]"
 			]
 		},
@@ -1258,6 +1368,7 @@
 				"annotations": []
 			},
 			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/DS_AzureSqlTable')]",
 				"[concat(variables('factoryId'), '/datasets/DS_PostgreSql')]"
 			]
 		},
@@ -1527,7 +1638,7 @@
 			]
 		},
 		{
-			"name": "[concat(parameters('factoryName'), '/PL_SEND_EMAIL_GITHUB')]",
+			"name": "[concat(parameters('factoryName'), '/PL_SEND_EMAIL')]",
 			"type": "Microsoft.DataFactory/factories/pipelines",
 			"apiVersion": "2018-06-01",
 			"properties": {
@@ -1744,11 +1855,13 @@
 					}
 				},
 				"folder": {
-					"name": "SAW_GITHUB"
+					"name": "SAW"
 				},
 				"annotations": []
 			},
-			"dependsOn": []
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/DS_AzureSqlTable')]"
+			]
 		},
 		{
 			"name": "[concat(parameters('factoryName'), '/PL_SOURCE_TO_SILVER_MAIN')]",
@@ -1927,6 +2040,7 @@
 				"annotations": []
 			},
 			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/DS_AzureSqlTable')]",
 				"[concat(variables('factoryId'), '/pipelines/PL_SOURCE_TO_SILVER_INNER')]"
 			]
 		},
@@ -2123,6 +2237,7 @@
 				"annotations": []
 			},
 			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/DS_AzureSqlTable')]",
 				"[concat(variables('factoryId'), '/pipelines/PL_SOURCE_TO_SILVER_INNER_SAW')]"
 			]
 		},
@@ -2190,9 +2305,9 @@
 						"type": "ExecutePipeline",
 						"dependsOn": [
 							{
-								"activity": "Silver To Gold Bridge",
+								"activity": "Trigger PowerBI Refresh",
 								"dependencyConditions": [
-									"Completed"
+									"Succeeded"
 								]
 							}
 						],
@@ -2202,7 +2317,7 @@
 						"userProperties": [],
 						"typeProperties": {
 							"pipeline": {
-								"referenceName": "PL_SEND_EMAIL",
+								"referenceName": "PL_SEND_EMAIL_GITHUB",
 								"type": "PipelineReference"
 							},
 							"waitOnCompletion": true,
@@ -2273,6 +2388,30 @@
 								"table_type": "BRIDGE"
 							}
 						}
+					},
+					{
+						"name": "Trigger PowerBI Refresh",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "Silver To Gold Bridge",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "PL_DATASET_REFRESH",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {}
+						}
 					}
 				],
 				"policy": {
@@ -2285,7 +2424,8 @@
 			},
 			"dependsOn": [
 				"[concat(variables('factoryId'), '/pipelines/PL_SOURCE_TO_SILVER_MAIN_SAW_GITHUB')]",
-				"[concat(variables('factoryId'), '/pipelines/PL_SILVER_GOLD_MAIN_GITHUB')]"
+				"[concat(variables('factoryId'), '/pipelines/PL_SILVER_GOLD_MAIN_GITHUB')]",
+				"[concat(variables('factoryId'), '/pipelines/PL_DATASET_REFRESH')]"
 			]
 		},
 		{
@@ -2415,7 +2555,8 @@
 			},
 			"dependsOn": [
 				"[concat(variables('factoryId'), '/pipelines/PL_SOURCE_TO_SILVER_MAIN_SAW')]",
-				"[concat(variables('factoryId'), '/pipelines/PL_SILVER_GOLD_MAIN')]"
+				"[concat(variables('factoryId'), '/pipelines/PL_SILVER_GOLD_MAIN')]",
+				"[concat(variables('factoryId'), '/pipelines/PL_SEND_EMAIL')]"
 			]
 		}
 	]
