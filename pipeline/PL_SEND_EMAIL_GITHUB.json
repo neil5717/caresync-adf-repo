@@ -1,5 +1,5 @@
 {
-	"name": "PL_SEND_EMAIL",
+	"name": "PL_SEND_EMAIL_GITHUB",
 	"properties": {
 		"activities": [
 			{
@@ -209,7 +209,7 @@
 			}
 		},
 		"folder": {
-			"name": "SAW"
+			"name": "SAW_GITHUB"
 		},
 		"annotations": []
 	}
