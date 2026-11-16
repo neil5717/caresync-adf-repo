@@ -1,5 +1,5 @@
 {
-	"name": "PL_SEND_EMAIL",
+	"name": "PL_SEND_EMAIL_GITHUB",
 	"properties": {
 		"activities": [
 			{
@@ -18,14 +18,14 @@
 					"source": {
 						"type": "AzureSqlSource",
 						"sqlReaderQuery": {
-							"value": "select * from dbo.audit_log where adf_run_id='@{pipeline().parameters.adf_run_id}' ORDER BY table_id ASC;",
+							"value": "select * from ctrl.audit_log where adf_run_id='@{pipeline().parameters.adf_run_id}'",
 							"type": "Expression"
 						},
 						"queryTimeout": "02:00:00",
 						"partitionOption": "None"
 					},
 					"dataset": {
-						"referenceName": "DS_FabricSQL_ProcessDB",
+						"referenceName": "DS_AzureSqlTable",
 						"type": "DatasetReference"
 					},
 					"firstRowOnly": false
@@ -99,14 +99,14 @@
 					"source": {
 						"type": "AzureSqlSource",
 						"sqlReaderQuery": {
-							"value": "select count(*) as count from dbo.audit_log where adf_run_id='@{pipeline().parameters.adf_run_id}'\nand status !='SUCCESS'",
+							"value": "select count(*) as count from ctrl.audit_log where adf_run_id='@{pipeline().parameters.adf_run_id}'\nand status !='SUCCESS'",
 							"type": "Expression"
 						},
 						"queryTimeout": "02:00:00",
 						"partitionOption": "None"
 					},
 					"dataset": {
-						"referenceName": "DS_FabricSQL_ProcessDB",
+						"referenceName": "DS_AzureSqlTable",
 						"type": "DatasetReference"
 					}
 				}
@@ -209,7 +209,7 @@
 			}
 		},
 		"folder": {
-			"name": "SAW"
+			"name": "SAW_GITHUB"
 		},
 		"annotations": []
 	}
