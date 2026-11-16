@@ -61,17 +61,17 @@
 					},
 					"authentication": {
 						"type": "ServicePrincipal",
-						"pfx": {
+						"userTenant": "0debf8d3-fbc0-4a42-b6c8-5a3832fc8daa",
+						"username": "991dc376-7920-4dc6-b784-f5bebb576e6e",
+						"resource": "https://analysis.windows.net/powerbi/api",
+						"password": {
 							"type": "AzureKeyVaultSecret",
 							"store": {
-								"referenceName": "LS_RefreshAPI",
+								"referenceName": "LS_KeyVoult",
 								"type": "LinkedServiceReference"
 							},
 							"secretName": "datasetrefreshapi"
-						},
-						"userTenant": "0debf8d3-fbc0-4a42-b6c8-5a3832fc8daa",
-						"username": "991dc376-7920-4dc6-b784-f5bebb576e6e",
-						"resource": "https://analysis.windows.net/powerbi/api"
+						}
 					}
 				}
 			}
