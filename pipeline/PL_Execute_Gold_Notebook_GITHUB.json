@@ -172,7 +172,7 @@
 				},
 				"userProperties": [],
 				"linkedServiceName": {
-					"referenceName": "LS_AzureSqlDatabase",
+					"referenceName": "LS_FabricSQL_ProcessDB",
 					"type": "LinkedServiceReference"
 				},
 				"typeProperties": {
@@ -180,7 +180,7 @@
 						{
 							"type": "Query",
 							"text": {
-								"value": "UPDATE ctrl.audit_log\nSET status = 'SUCCESS',\n    end_time = SYSUTCDATETIME(),\n    records_written = @{int(activity('Get Gold Notebook Result').output.properties.exitValue)}\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND table_id = @{pipeline().parameters.table_id};",
+								"value": "UPDATE dbo.audit_log\nSET status = 'SUCCESS',\n    end_time = SYSUTCDATETIME(),\n    records_written = @{int(activity('Get Gold Notebook Result').output.properties.exitValue)}\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND table_id = @{pipeline().parameters.table_id};",
 								"type": "Expression"
 							}
 						}
