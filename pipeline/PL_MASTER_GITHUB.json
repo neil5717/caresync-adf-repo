@@ -12,7 +12,7 @@
 				"userProperties": [],
 				"typeProperties": {
 					"pipeline": {
-						"referenceName": "PL_SOURCE_TO_SILVER_MAIN_SAW",
+						"referenceName": "PL_SOURCE_TO_SILVER_MAIN_SAW_GITHUB",
 						"type": "PipelineReference"
 					},
 					"waitOnCompletion": true,
@@ -34,12 +34,6 @@
 						"dependencyConditions": [
 							"Completed"
 						]
-					},
-					{
-						"activity": "Source To Silver ADLS Csv_copy1",
-						"dependencyConditions": [
-							"Completed"
-						]
 					}
 				],
 				"policy": {
@@ -48,34 +42,11 @@
 				"userProperties": [],
 				"typeProperties": {
 					"pipeline": {
-						"referenceName": "PL_SILVER_GOLD_MAIN",
+						"referenceName": "PL_SILVER_GOLD_MAIN_GITHUB",
 						"type": "PipelineReference"
 					},
 					"waitOnCompletion": true,
 					"parameters": {
-						"adf_run_id": {
-							"value": "@pipeline().RunId",
-							"type": "Expression"
-						}
-					}
-				}
-			},
-			{
-				"name": "Source To Silver ADLS Csv_copy1",
-				"type": "ExecutePipeline",
-				"dependsOn": [],
-				"policy": {
-					"secureInput": false
-				},
-				"userProperties": [],
-				"typeProperties": {
-					"pipeline": {
-						"referenceName": "PL_SOURCE_TO_SILVER_MAIN_SAW",
-						"type": "PipelineReference"
-					},
-					"waitOnCompletion": true,
-					"parameters": {
-						"source_system": "adls_csv",
 						"adf_run_id": {
 							"value": "@pipeline().RunId",
 							"type": "Expression"
