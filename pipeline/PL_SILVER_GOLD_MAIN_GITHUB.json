@@ -18,7 +18,7 @@
 					"source": {
 						"type": "AzureSqlSource",
 						"sqlReaderQuery": {
-							"value": "select table_id ,gold_table_name from dbo.table_config where is_active=1 and stage='SILVER_TO_GOLD'",
+							"value": "select table_id ,gold_table_name from dbo.table_config where is_active=1 and stage='SILVER_TO_GOLD' and table_type='@{pipeline().parameters.table_type}'",
 							"type": "Expression"
 						},
 						"queryTimeout": "02:00:00",
@@ -210,6 +210,9 @@
 		],
 		"parameters": {
 			"adf_run_id": {
+				"type": "string"
+			},
+			"table_type": {
 				"type": "string"
 			}
 		},

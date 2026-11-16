@@ -50,7 +50,8 @@
 						"adf_run_id": {
 							"value": "@pipeline().RunId",
 							"type": "Expression"
-						}
+						},
+						"table_type": "DIM"
 					}
 				}
 			},
@@ -59,7 +60,7 @@
 				"type": "ExecutePipeline",
 				"dependsOn": [
 					{
-						"activity": "Silver To Gold",
+						"activity": "Silver To Gold_copy1_copy1",
 						"dependencyConditions": [
 							"Completed"
 						]
@@ -80,6 +81,66 @@
 							"value": "@pipeline().RunId",
 							"type": "Expression"
 						}
+					}
+				}
+			},
+			{
+				"name": "Silver To Gold_copy1",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Silver To Gold",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_SILVER_GOLD_MAIN_GITHUB",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"adf_run_id": {
+							"value": "@pipeline().RunId",
+							"type": "Expression"
+						},
+						"table_type": "FACT"
+					}
+				}
+			},
+			{
+				"name": "Silver To Gold_copy1_copy1",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Silver To Gold_copy1",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_SILVER_GOLD_MAIN_GITHUB",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"adf_run_id": {
+							"value": "@pipeline().RunId",
+							"type": "Expression"
+						},
+						"table_type": "BRIDGE"
 					}
 				}
 			}
