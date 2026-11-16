@@ -3,7 +3,7 @@
 	"properties": {
 		"activities": [
 			{
-				"name": "Source To Silver Neon Postgres",
+				"name": "Source To Silver GitHub",
 				"type": "ExecutePipeline",
 				"dependsOn": [],
 				"policy": {
@@ -17,7 +17,7 @@
 					},
 					"waitOnCompletion": true,
 					"parameters": {
-						"source_system": "neon_postgres",
+						"source_system": "GitHub",
 						"adf_run_id": {
 							"value": "@pipeline().RunId",
 							"type": "Expression"
@@ -26,11 +26,11 @@
 				}
 			},
 			{
-				"name": "Silver To Gold",
+				"name": "Silver To Gold DIM",
 				"type": "ExecutePipeline",
 				"dependsOn": [
 					{
-						"activity": "Source To Silver Neon Postgres",
+						"activity": "Source To Silver GitHub",
 						"dependencyConditions": [
 							"Completed"
 						]
@@ -60,7 +60,7 @@
 				"type": "ExecutePipeline",
 				"dependsOn": [
 					{
-						"activity": "Silver To Gold_copy1_copy1",
+						"activity": "Silver To Gold Bridge",
 						"dependencyConditions": [
 							"Completed"
 						]
@@ -85,11 +85,11 @@
 				}
 			},
 			{
-				"name": "Silver To Gold_copy1",
+				"name": "Silver To Gold Fact",
 				"type": "ExecutePipeline",
 				"dependsOn": [
 					{
-						"activity": "Silver To Gold",
+						"activity": "Silver To Gold DIM",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -115,11 +115,11 @@
 				}
 			},
 			{
-				"name": "Silver To Gold_copy1_copy1",
+				"name": "Silver To Gold Bridge",
 				"type": "ExecutePipeline",
 				"dependsOn": [
 					{
-						"activity": "Silver To Gold_copy1",
+						"activity": "Silver To Gold Fact",
 						"dependencyConditions": [
 							"Succeeded"
 						]
