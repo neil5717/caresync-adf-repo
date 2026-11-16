@@ -60,9 +60,9 @@
 				"type": "ExecutePipeline",
 				"dependsOn": [
 					{
-						"activity": "Silver To Gold Bridge",
+						"activity": "Trigger PowerBI Refresh",
 						"dependencyConditions": [
-							"Completed"
+							"Succeeded"
 						]
 					}
 				],
@@ -142,6 +142,29 @@
 						},
 						"table_type": "BRIDGE"
 					}
+				}
+			},
+			{
+				"name": "Trigger PowerBI Refresh",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Silver To Gold Bridge",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_DATASET_REFRESH",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true
 				}
 			}
 		],
