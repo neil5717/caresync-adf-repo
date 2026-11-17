@@ -288,7 +288,7 @@
 						{
 							"type": "Query",
 							"text": {
-								"value": "MERGE dbo.audit_log AS tgt\nUSING\n(\n    SELECT table_id\n    FROM dbo.table_config\n    WHERE is_active = 1\n      AND stage = 'SILVER_TO_GOLD'\n      AND table_type = '@{pipeline().parameters.table_type}'\n) AS src\nON  tgt.adf_run_id = '@{pipeline().parameters.adf_run_id}'\nAND tgt.table_id = src.table_id\nAND tgt.stage = 'SILVER_TO_GOLD'\n\nWHEN MATCHED THEN\n    UPDATE SET\n        status = 'FAILED',\n        end_time = SYSUTCDATETIME(),\n        error_message = 'Failed to read Gold table configuration'\n\nWHEN NOT MATCHED THEN\n    INSERT\n    (\n        adf_run_id,\n        table_id,\n        stage,\n        status,\n        start_time,\n        end_time,\n        error_message\n    )\n    VALUES\n    (\n        '@{pipeline().parameters.adf_run_id}',\n        src.table_id,\n        'SILVER_TO_GOLD',\n        'FAILED',\n        SYSUTCDATETIME(),\n        SYSUTCDATETIME(),\n        'Failed to read Gold table configuration'\n    );",
+								"value": "INSERT INTO dbo.audit_log\n(\n    adf_run_id,\n    table_id,\n    stage,\n    status,\n    start_time,\n    end_time,\n    error_message\n)\nVALUES\n(\n    '@{pipeline().parameters.adf_run_id}',\n    NULL,\n    'SILVER_TO_GOLD',\n    'FAILED',\n    SYSUTCDATETIME(),\n    SYSUTCDATETIME(),\n    'Failed to read Gold table configuration for table_type: @{pipeline().parameters.table_type}'\n);",
 								"type": "Expression"
 							}
 						}
