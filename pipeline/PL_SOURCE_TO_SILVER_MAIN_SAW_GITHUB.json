@@ -162,7 +162,7 @@
 							"userProperties": [],
 							"typeProperties": {
 								"message": "500",
-								"errorCode": "The inner pipeline failed"
+								"errorCode": "The inner pipeline failed,"
 							}
 						}
 					]
