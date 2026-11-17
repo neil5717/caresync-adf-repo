@@ -169,8 +169,8 @@
 							],
 							"userProperties": [],
 							"typeProperties": {
-								"message": "500",
-								"errorCode": "The inner pipeline failed"
+								"message": "Gold notebook execution failed",
+								"errorCode": "GOLD_PIPELINE_FAILED"
 							}
 						}
 					]
