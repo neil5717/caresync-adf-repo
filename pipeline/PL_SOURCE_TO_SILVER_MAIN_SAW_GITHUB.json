@@ -218,7 +218,7 @@
 				"userProperties": [],
 				"typeProperties": {
 					"message": "Failed to retrieve source table configuration. Check audit_log and Read Table From Source activity output.",
-					"errorCode": "SOURCE_CONFIG_LOOKUP_FAILED."
+					"errorCode": "SOURCE_CONFIG_LOOKUP_FAILED"
 				}
 			}
 		],
