@@ -212,9 +212,9 @@
 				"type": "Fail",
 				"dependsOn": [
 					{
-						"activity": "Getting All Notebooks IDs",
+						"activity": "Update Notebook Discovery Failed Audit",
 						"dependencyConditions": [
-							"Failed"
+							"Succeeded"
 						]
 					}
 				],
@@ -222,6 +222,42 @@
 				"typeProperties": {
 					"message": "Getting Notebooks ID Failed",
 					"errorCode": "Getting Notebooks ID Failed"
+				}
+			},
+			{
+				"name": "Update Notebook Discovery Failed Audit",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Getting All Notebooks IDs",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "LS_FabricSQL_ProcessDB",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "Query",
+							"text": {
+								"value": "MERGE dbo.audit_log AS tgt\nUSING\n(\n    SELECT table_id\n    FROM dbo.table_config\n    WHERE is_active = 1\n      AND stage = 'SILVER_TO_GOLD'\n      AND table_type = '@{pipeline().parameters.table_type}'\n) AS src\nON  tgt.adf_run_id = '@{pipeline().parameters.adf_run_id}'\nAND tgt.table_id = src.table_id\nAND tgt.stage = 'SILVER_TO_GOLD'\n\nWHEN MATCHED THEN\n    UPDATE SET\n        status = 'FAILED',\n        end_time = SYSUTCDATETIME(),\n        error_message = 'Failed to retrieve Fabric notebook list'\n\nWHEN NOT MATCHED THEN\n    INSERT\n    (\n        adf_run_id,\n        table_id,\n        status,\n        stage,\n        start_time,\n        end_time,\n        error_message\n    )\n    VALUES\n    (\n        '@{pipeline().parameters.adf_run_id}',\n        src.table_id,\n        'FAILED',\n        'SILVER_TO_GOLD',\n        SYSUTCDATETIME(),\n        SYSUTCDATETIME(),\n        'Failed to retrieve Fabric notebook list'\n    );",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
 				}
 			}
 		],
