@@ -160,8 +160,8 @@
 				],
 				"userProperties": [],
 				"typeProperties": {
-					"message": "Power BI dataset refresh API request failed. Check PL_DATASET_REFRESH execution logs and audit_log for details.",
-					"errorCode": "POWERBI_REFRESH_FAILED"
+					"message": "Failed to retrieve Power BI refresh configuration from ProcessDB.",
+					"errorCode": "POWERBI_LOOKUP_FAILED"
 				}
 			},
 			{
