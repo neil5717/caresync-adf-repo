@@ -192,7 +192,14 @@
 					{
 						"name": "Lookup_API_Body",
 						"type": "Lookup",
-						"dependsOn": [],
+						"dependsOn": [
+							{
+								"activity": "Insert Refresh In-Progress Audit",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
 						"policy": {
 							"timeout": "0.12:00:00",
 							"retry": 0,
@@ -262,10 +269,186 @@
 								}
 							}
 						}
+					},
+					{
+						"name": "Insert Refresh In-Progress Audit",
+						"type": "Script",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "LS_FabricSQL_ProcessDB",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "Query",
+									"text": {
+										"value": "INSERT INTO dbo.audit_log\n(\n    adf_run_id,\n    table_id,\n    stage,\n    status,\n    start_time,\n    created_timestamp\n)\nVALUES\n(\n    '@{pipeline().parameters.adf_run_id}',\n    NULL,\n    'POWERBI_REFRESH',\n    'IN_PROGRESS',\n    SYSUTCDATETIME(),\n    SYSUTCDATETIME()\n);",
+										"type": "Expression"
+									}
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					},
+					{
+						"name": "Update Lookup Refresh Failed Audit",
+						"type": "Script",
+						"dependsOn": [
+							{
+								"activity": "Lookup_API_Body",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "LS_FabricSQL_ProcessDB",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "Query",
+									"text": {
+										"value": "UPDATE dbo.audit_log\nSET\n    status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Failed to retrieve Power BI refresh configuration'\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND stage = 'POWERBI_REFRESH'\n  AND table_id IS NULL;",
+										"type": "Expression"
+									}
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					},
+					{
+						"name": "Fail - Power BI Lookup",
+						"type": "Fail",
+						"dependsOn": [
+							{
+								"activity": "Update Lookup Refresh Failed Audit",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"message": "Power BI dataset refresh API request failed. Check PL_DATASET_REFRESH execution logs and audit_log for details.",
+							"errorCode": "POWERBI_REFRESH_FAILED"
+						}
+					},
+					{
+						"name": "Update Dataset Refresh Success Audit",
+						"type": "Script",
+						"dependsOn": [
+							{
+								"activity": "Dataset Refresh",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "LS_FabricSQL_ProcessDB",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "Query",
+									"text": {
+										"value": "UPDATE dbo.audit_log\nSET\n    status = 'SUCCESS',\n    end_time = SYSUTCDATETIME(),\n    error_message = NULL\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND stage = 'POWERBI_REFRESH'\n  AND table_id IS NULL;",
+										"type": "Expression"
+									}
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					},
+					{
+						"name": "Update Dataset Refresh Failed Audit",
+						"type": "Script",
+						"dependsOn": [
+							{
+								"activity": "Dataset Refresh",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "LS_FabricSQL_ProcessDB",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "Query",
+									"text": {
+										"value": "UPDATE dbo.audit_log\nSET\n    status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Power BI dataset refresh API request failed'\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND stage = 'POWERBI_REFRESH'\n  AND table_id IS NULL\n  AND status = 'IN_PROGRESS';",
+										"type": "Expression"
+									}
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					},
+					{
+						"name": "Fail - Dataset Refresh",
+						"type": "Fail",
+						"dependsOn": [
+							{
+								"activity": "Update Dataset Refresh Failed Audit",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"message": "Power BI dataset refresh API request failed. Check audit_log for details",
+							"errorCode": "POWERBI_REFRESH_FAILED"
+						}
 					}
 				],
 				"policy": {
 					"elapsedTimeMetric": {}
+				},
+				"parameters": {
+					"adf_run_id": {
+						"type": "string"
+					}
 				},
 				"folder": {
 					"name": "SAW_GITHUB"
@@ -1433,9 +1616,9 @@
 									"type": "Fail",
 									"dependsOn": [
 										{
-											"activity": "Ingest From Source To Silver",
+											"activity": "Update Fail Status",
 											"dependencyConditions": [
-												"Failed"
+												"Succeeded"
 											]
 										}
 									],
@@ -1758,9 +1941,9 @@
 						"type": "Fail",
 						"dependsOn": [
 							{
-								"activity": "Getting All Notebooks IDs",
+								"activity": "Update Notebook Discovery Failed Audit",
 								"dependencyConditions": [
-									"Failed"
+									"Succeeded"
 								]
 							}
 						],
@@ -1768,6 +1951,42 @@
 						"typeProperties": {
 							"message": "Getting Notebooks ID Failed",
 							"errorCode": "Getting Notebooks ID Failed"
+						}
+					},
+					{
+						"name": "Update Notebook Discovery Failed Audit",
+						"type": "Script",
+						"dependsOn": [
+							{
+								"activity": "Getting All Notebooks IDs",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "LS_FabricSQL_ProcessDB",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "Query",
+									"text": {
+										"value": "MERGE dbo.audit_log AS tgt\nUSING\n(\n    SELECT table_id\n    FROM dbo.table_config\n    WHERE is_active = 1\n      AND stage = 'SILVER_TO_GOLD'\n      AND table_type = '@{pipeline().parameters.table_type}'\n) AS src\nON  tgt.adf_run_id = '@{pipeline().parameters.adf_run_id}'\nAND tgt.table_id = src.table_id\nAND tgt.stage = 'SILVER_TO_GOLD'\n\nWHEN MATCHED THEN\n    UPDATE SET\n        status = 'FAILED',\n        end_time = SYSUTCDATETIME(),\n        error_message = 'Failed to retrieve Fabric notebook list'\n\nWHEN NOT MATCHED THEN\n    INSERT\n    (\n        adf_run_id,\n        table_id,\n        status,\n        stage,\n        start_time,\n        end_time,\n        error_message\n    )\n    VALUES\n    (\n        '@{pipeline().parameters.adf_run_id}',\n        src.table_id,\n        'FAILED',\n        'SILVER_TO_GOLD',\n        SYSUTCDATETIME(),\n        SYSUTCDATETIME(),\n        'Failed to retrieve Fabric notebook list'\n    );",
+										"type": "Expression"
+									}
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
 						}
 					}
 				],
@@ -2560,7 +2779,157 @@
 								"type": "PipelineReference"
 							},
 							"waitOnCompletion": true,
-							"parameters": {}
+							"parameters": {
+								"adf_run_id": {
+									"value": "@pipeline().RunId",
+									"type": "Expression"
+								}
+							}
+						}
+					},
+					{
+						"name": "Send Mail - Source Failed",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "Source To Silver GitHub",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"policy": {
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "PL_SEND_EMAIL_GITHUB",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {
+								"adf_run_id": {
+									"value": "@pipeline().RunId",
+									"type": "Expression"
+								}
+							}
+						}
+					},
+					{
+						"name": "Send Mail - DIM Failed",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "Silver To Gold DIM",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"policy": {
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "PL_SEND_EMAIL_GITHUB",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {
+								"adf_run_id": {
+									"value": "@pipeline().RunId",
+									"type": "Expression"
+								}
+							}
+						}
+					},
+					{
+						"name": "Send Mail - FACT Failed",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "Silver To Gold Fact",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"policy": {
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "PL_SEND_EMAIL_GITHUB",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {
+								"adf_run_id": {
+									"value": "@pipeline().RunId",
+									"type": "Expression"
+								}
+							}
+						}
+					},
+					{
+						"name": "Send Mail - BRIDGE Failed",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "Silver To Gold Bridge",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"policy": {
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "PL_SEND_EMAIL_GITHUB",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {
+								"adf_run_id": {
+									"value": "@pipeline().RunId",
+									"type": "Expression"
+								}
+							}
+						}
+					},
+					{
+						"name": "Send Mail - Refresh Failed",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "Trigger PowerBI Refresh",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"policy": {
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "PL_SEND_EMAIL_GITHUB",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {
+								"adf_run_id": {
+									"value": "@pipeline().RunId",
+									"type": "Expression"
+								}
+							}
 						}
 					}
 				],
