@@ -259,6 +259,59 @@
 					],
 					"scriptBlockExecutionTimeout": "02:00:00"
 				}
+			},
+			{
+				"name": "Update Gold Config Lookup Failed Audit",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Read Table From Source",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "LS_FabricSQL_ProcessDB",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "Query",
+							"text": {
+								"value": "MERGE dbo.audit_log AS tgt\nUSING\n(\n    SELECT table_id\n    FROM dbo.table_config\n    WHERE is_active = 1\n      AND stage = 'SILVER_TO_GOLD'\n      AND table_type = '@{pipeline().parameters.table_type}'\n) AS src\nON  tgt.adf_run_id = '@{pipeline().parameters.adf_run_id}'\nAND tgt.table_id = src.table_id\nAND tgt.stage = 'SILVER_TO_GOLD'\n\nWHEN MATCHED THEN\n    UPDATE SET\n        status = 'FAILED',\n        end_time = SYSUTCDATETIME(),\n        error_message = 'Failed to read Gold table configuration'\n\nWHEN NOT MATCHED THEN\n    INSERT\n    (\n        adf_run_id,\n        table_id,\n        stage,\n        status,\n        start_time,\n        end_time,\n        error_message\n    )\n    VALUES\n    (\n        '@{pipeline().parameters.adf_run_id}',\n        src.table_id,\n        'SILVER_TO_GOLD',\n        'FAILED',\n        SYSUTCDATETIME(),\n        SYSUTCDATETIME(),\n        'Failed to read Gold table configuration'\n    );",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Fail - Gold Config Lookup",
+				"type": "Fail",
+				"dependsOn": [
+					{
+						"activity": "Update Gold Config Lookup Failed Audit",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"message": "Failed to read Gold table configuration from ProcessDB",
+					"errorCode": "GOLD_CONFIG_LOOKUP_FAILED"
+				}
 			}
 		],
 		"parameters": {
