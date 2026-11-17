@@ -164,7 +164,13 @@
 						"referenceName": "PL_DATASET_REFRESH",
 						"type": "PipelineReference"
 					},
-					"waitOnCompletion": true
+					"waitOnCompletion": true,
+					"parameters": {
+						"adf_run_id": {
+							"value": "@pipeline().RunId",
+							"type": "Expression"
+						}
+					}
 				}
 			}
 		],
