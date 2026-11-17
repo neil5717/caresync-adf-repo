@@ -165,8 +165,8 @@
 				}
 			},
 			{
-				"name": "Update Dataset Refresh Success Audit",
-				"type": "Script",
+				"name": "Check PowerBI Refresh Status",
+				"type": "IfCondition",
 				"dependsOn": [
 					{
 						"activity": "Dataset Refresh",
@@ -175,33 +175,95 @@
 						]
 					}
 				],
-				"policy": {
-					"timeout": "0.12:00:00",
-					"retry": 0,
-					"retryIntervalInSeconds": 30,
-					"secureOutput": false,
-					"secureInput": false
-				},
 				"userProperties": [],
-				"linkedServiceName": {
-					"referenceName": "LS_FabricSQL_ProcessDB",
-					"type": "LinkedServiceReference"
-				},
 				"typeProperties": {
-					"scripts": [
+					"expression": {
+						"value": "@equals(activity('Dataset Refresh').output.status, 'Completed')",
+						"type": "Expression"
+					},
+					"ifFalseActivities": [
 						{
-							"type": "Query",
-							"text": {
-								"value": "UPDATE dbo.audit_log\nSET\n    status = 'SUCCESS',\n    end_time = SYSUTCDATETIME(),\n    error_message = NULL\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND stage = 'POWERBI_REFRESH'\n  AND table_id IS NULL;",
-								"type": "Expression"
+							"name": "Update Dataset Refresh Failed Audit",
+							"type": "Script",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "LS_FabricSQL_ProcessDB",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "Query",
+										"text": {
+											"value": "UPDATE dbo.audit_log\nSET\n    status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Power BI dataset refresh API request failed'\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND stage = 'POWERBI_REFRESH'\n  AND table_id IS NULL\n  AND status = 'IN_PROGRESS';",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "02:00:00"
+							}
+						},
+						{
+							"name": "Fail - Dataset Refresh",
+							"type": "Fail",
+							"dependsOn": [
+								{
+									"activity": "Update Dataset Refresh Failed Audit",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"message": "Power BI dataset refresh API request failed. Check audit_log for details",
+								"errorCode": "POWERBI_REFRESH_FAILED"
 							}
 						}
 					],
-					"scriptBlockExecutionTimeout": "02:00:00"
+					"ifTrueActivities": [
+						{
+							"name": "Update Dataset Refresh Success Audit",
+							"type": "Script",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"linkedServiceName": {
+								"referenceName": "LS_FabricSQL_ProcessDB",
+								"type": "LinkedServiceReference"
+							},
+							"typeProperties": {
+								"scripts": [
+									{
+										"type": "Query",
+										"text": {
+											"value": "UPDATE dbo.audit_log\nSET\n    status = 'SUCCESS',\n    end_time = SYSUTCDATETIME(),\n    error_message = NULL\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND stage = 'POWERBI_REFRESH'\n  AND table_id IS NULL;",
+											"type": "Expression"
+										}
+									}
+								],
+								"scriptBlockExecutionTimeout": "02:00:00"
+							}
+						}
+					]
 				}
 			},
 			{
-				"name": "Update Dataset Refresh Failed Audit",
+				"name": "Update Dataset Refresh Request Failed Audit",
 				"type": "Script",
 				"dependsOn": [
 					{
@@ -228,7 +290,7 @@
 						{
 							"type": "Query",
 							"text": {
-								"value": "UPDATE dbo.audit_log\nSET\n    status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Power BI dataset refresh API request failed'\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND stage = 'POWERBI_REFRESH'\n  AND table_id IS NULL\n  AND status = 'IN_PROGRESS';",
+								"value": "UPDATE dbo.audit_log\nSET\n    status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Power BI refresh API request failed'\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND stage = 'POWERBI_REFRESH'\n  AND table_id IS NULL\n  AND status = 'IN_PROGRESS';",
 								"type": "Expression"
 							}
 						}
@@ -237,11 +299,11 @@
 				}
 			},
 			{
-				"name": "Fail - Dataset Refresh",
+				"name": "Fail - Dataset Refresh Request",
 				"type": "Fail",
 				"dependsOn": [
 					{
-						"activity": "Update Dataset Refresh Failed Audit",
+						"activity": "Update Dataset Refresh Request Failed Audit",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -249,8 +311,8 @@
 				],
 				"userProperties": [],
 				"typeProperties": {
-					"message": "Power BI dataset refresh API request failed. Check audit_log for details",
-					"errorCode": "POWERBI_REFRESH_FAILED"
+					"message": "Power BI refresh API request failed. Check audit_log and activity output",
+					"errorCode": "POWERBI_REFRESH_REQUEST_FAILED"
 				}
 			}
 		],
