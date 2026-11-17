@@ -148,7 +148,7 @@
 									{
 										"type": "Query",
 										"text": {
-											"value": "UPDATE dbo.audit_log\nset status='FAILED',end_time=sysutcdatetime()\nwhere adf_run_id='@{pipeline().parameters.adf_run_id}' and table_id=@{item().table_id}",
+											"value": "UPDATE dbo.audit_log\nSET\n    status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Gold notebook pipeline execution failed'\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND table_id = @{item().table_id}\n  AND stage = 'SILVER_TO_GOLD';",
 											"type": "Expression"
 										}
 									}
@@ -157,13 +157,13 @@
 							}
 						},
 						{
-							"name": "Fail1",
+							"name": "Fail Gold Notebook Pipeline",
 							"type": "Fail",
 							"dependsOn": [
 								{
-									"activity": "Execute Gold Notebook",
+									"activity": "Update Fail Status",
 									"dependencyConditions": [
-										"Failed"
+										"Succeeded"
 									]
 								}
 							],
@@ -205,6 +205,23 @@
 						"type": "MSI",
 						"resource": "https://api.fabric.microsoft.com"
 					}
+				}
+			},
+			{
+				"name": "Getting Notebooks ID Failed",
+				"type": "Fail",
+				"dependsOn": [
+					{
+						"activity": "Getting All Notebooks IDs",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"message": "Getting Notebooks ID Failed",
+					"errorCode": "Getting Notebooks ID Failed"
 				}
 			}
 		],
