@@ -149,7 +149,7 @@
 							}
 						},
 						{
-							"name": "Fail1",
+							"name": "Fail - Source To Silver Execution",
 							"type": "Fail",
 							"dependsOn": [
 								{
@@ -161,8 +161,8 @@
 							],
 							"userProperties": [],
 							"typeProperties": {
-								"message": "500",
-								"errorCode": "The inner pipeline failed,"
+								"message": "Source to Silver pipeline execution failed. Check audit_log and activity output for the failed table and error details.",
+								"errorCode": "SOURCE_TO_SILVER_EXECUTION_FAILED"
 							}
 						}
 					]
