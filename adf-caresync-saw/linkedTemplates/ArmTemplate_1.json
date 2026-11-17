@@ -13,680 +13,6 @@
 	},
 	"resources": [
 		{
-			"name": "[concat(parameters('factoryName'), '/DS_PostgreSql')]",
-			"type": "Microsoft.DataFactory/factories/datasets",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"linkedServiceName": {
-					"referenceName": "LS_PostgreSQL",
-					"type": "LinkedServiceReference"
-				},
-				"annotations": [],
-				"type": "PostgreSqlV2Table",
-				"schema": [],
-				"typeProperties": {}
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/PL_Execute_Gold_Notebook_GITHUB')]",
-			"type": "Microsoft.DataFactory/factories/pipelines",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"activities": [
-					{
-						"name": "Filter Notebook",
-						"type": "Filter",
-						"dependsOn": [],
-						"userProperties": [],
-						"typeProperties": {
-							"items": {
-								"value": "@pipeline().parameters.p_notebooks",
-								"type": "Expression"
-							},
-							"condition": {
-								"value": "@equals(\n    toUpper(item().displayName),\n    toUpper(concat('NB_Gold_', pipeline().parameters.p_gold_table_name))\n)",
-								"type": "Expression"
-							}
-						}
-					},
-					{
-						"name": "Condition Notebook Exists",
-						"type": "IfCondition",
-						"dependsOn": [
-							{
-								"activity": "Filter Notebook",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"userProperties": [],
-						"typeProperties": {
-							"expression": {
-								"value": "@greater(length(activity('Filter Notebook').output.Value), 0)",
-								"type": "Expression"
-							},
-							"ifFalseActivities": [
-								{
-									"name": "Update Gold Notebook Not Found Status",
-									"type": "Script",
-									"dependsOn": [],
-									"policy": {
-										"timeout": "0.12:00:00",
-										"retry": 0,
-										"retryIntervalInSeconds": 30,
-										"secureOutput": false,
-										"secureInput": false
-									},
-									"userProperties": [],
-									"linkedServiceName": {
-										"referenceName": "LS_FabricSQL_ProcessDB",
-										"type": "LinkedServiceReference"
-									},
-									"typeProperties": {
-										"scripts": [
-											{
-												"type": "Query",
-												"text": {
-													"value": "UPDATE dbo.audit_log\nSET\n    status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Gold notebook not found in workspace'\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND table_id = @{pipeline().parameters.table_id};",
-													"type": "Expression"
-												}
-											}
-										],
-										"scriptBlockExecutionTimeout": "02:00:00"
-									}
-								},
-								{
-									"name": "Fail Gold Notebook Not Found",
-									"type": "Fail",
-									"dependsOn": [
-										{
-											"activity": "Update Gold Notebook Not Found Status",
-											"dependencyConditions": [
-												"Succeeded"
-											]
-										}
-									],
-									"userProperties": [],
-									"typeProperties": {
-										"message": "No matching Gold notebook found in the Fabric workspace.",
-										"errorCode": "GOLD_NOTEBOOK_NOT_FOUND"
-									}
-								}
-							],
-							"ifTrueActivities": [
-								{
-									"name": "Execute Gold Notebook Pipeline",
-									"type": "ExecutePipeline",
-									"dependsOn": [],
-									"policy": {
-										"secureInput": false
-									},
-									"userProperties": [],
-									"typeProperties": {
-										"pipeline": {
-											"referenceName": "PL_Run_Gold_Notebook",
-											"type": "PipelineReference"
-										},
-										"waitOnCompletion": true,
-										"parameters": {
-											"p_gold_table_name": {
-												"value": "@pipeline().parameters.p_gold_table_name",
-												"type": "Expression"
-											},
-											"adf_run_id": {
-												"value": "@pipeline().parameters.adf_run_id",
-												"type": "Expression"
-											},
-											"table_id": {
-												"value": "@pipeline().parameters.table_id",
-												"type": "Expression"
-											},
-											"p_notebook_id": {
-												"value": "@activity('Filter Notebook').output.Value[0].id",
-												"type": "Expression"
-											}
-										}
-									}
-								}
-							]
-						}
-					}
-				],
-				"policy": {
-					"elapsedTimeMetric": {}
-				},
-				"parameters": {
-					"p_gold_table_name": {
-						"type": "string"
-					},
-					"p_notebooks": {
-						"type": "array"
-					},
-					"adf_run_id": {
-						"type": "string"
-					},
-					"table_id": {
-						"type": "string"
-					}
-				},
-				"variables": {
-					"v_job_status_url": {
-						"type": "String"
-					}
-				},
-				"folder": {
-					"name": "SAW_GITHUB"
-				},
-				"annotations": []
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/PL_DATASET_REFRESH')]",
-			"type": "Microsoft.DataFactory/factories/pipelines",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"activities": [
-					{
-						"name": "Lookup_API_Body",
-						"type": "Lookup",
-						"dependsOn": [
-							{
-								"activity": "Insert Refresh In-Progress Audit",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"policy": {
-							"timeout": "0.12:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"source": {
-								"type": "AzureSqlSource",
-								"sqlReaderQuery": "SELECT\n    JSON_QUERY(\n        '[' +\n        STRING_AGG(\n            CAST(\n                '{\"table\":\"' + TableName +\n                '\",\"partition\":\"' + PartitionName + '\"}'\n                AS NVARCHAR(MAX)\n            ),\n            ','\n        ) +\n        ']'\n    ) AS APIBody\nFROM dbo.PowerBIRefreshConfig\nWHERE DatasetID = 'b8aa8fb0-bed3-4f28-ba20-8ca0d114d5e0'\n  AND RunFlag = 1;",
-								"queryTimeout": "02:00:00",
-								"partitionOption": "None"
-							},
-							"dataset": {
-								"referenceName": "DS_FabricSQL_ProcessDB",
-								"type": "DatasetReference",
-								"parameters": {}
-							}
-						}
-					},
-					{
-						"name": "Dataset Refresh",
-						"type": "WebActivity",
-						"dependsOn": [
-							{
-								"activity": "Lookup_API_Body",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"policy": {
-							"timeout": "0.12:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"method": "POST",
-							"headers": {
-								"Content-Type": "application/json"
-							},
-							"url": {
-								"value": "@concat(\n'https://api.powerbi.com/v1.0/myorg/groups/',\n'5aa0e28e-ab58-4dd7-91b4-0b577536312a',\n'/datasets/',\n'b8aa8fb0-bed3-4f28-ba20-8ca0d114d5e0',\n'/refreshes'\n)",
-								"type": "Expression"
-							},
-							"body": {
-								"value": "{\n  \"type\": \"full\",\n  \"commitMode\": \"transactional\",\n  \"maxParallelism\": 300,\n  \"retryCount\": 1,\n  \"objects\": @{activity('Lookup_API_Body').output.firstRow.APIBody}\n}",
-								"type": "Expression"
-							},
-							"authentication": {
-								"type": "ServicePrincipal",
-								"userTenant": "0debf8d3-fbc0-4a42-b6c8-5a3832fc8daa",
-								"username": "991dc376-7920-4dc6-b784-f5bebb576e6e",
-								"resource": "https://analysis.windows.net/powerbi/api",
-								"password": {
-									"type": "AzureKeyVaultSecret",
-									"store": {
-										"referenceName": "LS_KeyVoult",
-										"type": "LinkedServiceReference"
-									},
-									"secretName": "datasetrefreshapi"
-								}
-							}
-						}
-					},
-					{
-						"name": "Insert Refresh In-Progress Audit",
-						"type": "Script",
-						"dependsOn": [],
-						"policy": {
-							"timeout": "0.12:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"linkedServiceName": {
-							"referenceName": "LS_FabricSQL_ProcessDB",
-							"type": "LinkedServiceReference"
-						},
-						"typeProperties": {
-							"scripts": [
-								{
-									"type": "Query",
-									"text": {
-										"value": "INSERT INTO dbo.audit_log\n(\n    adf_run_id,\n    table_id,\n    stage,\n    status,\n    start_time,\n    created_timestamp\n)\nVALUES\n(\n    '@{pipeline().parameters.adf_run_id}',\n    NULL,\n    'POWERBI_REFRESH',\n    'IN_PROGRESS',\n    SYSUTCDATETIME(),\n    SYSUTCDATETIME()\n);",
-										"type": "Expression"
-									}
-								}
-							],
-							"scriptBlockExecutionTimeout": "02:00:00"
-						}
-					},
-					{
-						"name": "Update Lookup Refresh Failed Audit",
-						"type": "Script",
-						"dependsOn": [
-							{
-								"activity": "Lookup_API_Body",
-								"dependencyConditions": [
-									"Failed"
-								]
-							}
-						],
-						"policy": {
-							"timeout": "0.12:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"linkedServiceName": {
-							"referenceName": "LS_FabricSQL_ProcessDB",
-							"type": "LinkedServiceReference"
-						},
-						"typeProperties": {
-							"scripts": [
-								{
-									"type": "Query",
-									"text": {
-										"value": "UPDATE dbo.audit_log\nSET\n    status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Failed to retrieve Power BI refresh configuration'\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND stage = 'POWERBI_REFRESH'\n  AND table_id IS NULL;",
-										"type": "Expression"
-									}
-								}
-							],
-							"scriptBlockExecutionTimeout": "02:00:00"
-						}
-					},
-					{
-						"name": "Fail - Power BI Lookup",
-						"type": "Fail",
-						"dependsOn": [
-							{
-								"activity": "Update Lookup Refresh Failed Audit",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"userProperties": [],
-						"typeProperties": {
-							"message": "Power BI dataset refresh API request failed. Check PL_DATASET_REFRESH execution logs and audit_log for details.",
-							"errorCode": "POWERBI_REFRESH_FAILED"
-						}
-					},
-					{
-						"name": "Update Dataset Refresh Success Audit",
-						"type": "Script",
-						"dependsOn": [
-							{
-								"activity": "Dataset Refresh",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"policy": {
-							"timeout": "0.12:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"linkedServiceName": {
-							"referenceName": "LS_FabricSQL_ProcessDB",
-							"type": "LinkedServiceReference"
-						},
-						"typeProperties": {
-							"scripts": [
-								{
-									"type": "Query",
-									"text": {
-										"value": "UPDATE dbo.audit_log\nSET\n    status = 'SUCCESS',\n    end_time = SYSUTCDATETIME(),\n    error_message = NULL\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND stage = 'POWERBI_REFRESH'\n  AND table_id IS NULL;",
-										"type": "Expression"
-									}
-								}
-							],
-							"scriptBlockExecutionTimeout": "02:00:00"
-						}
-					},
-					{
-						"name": "Update Dataset Refresh Failed Audit",
-						"type": "Script",
-						"dependsOn": [
-							{
-								"activity": "Dataset Refresh",
-								"dependencyConditions": [
-									"Failed"
-								]
-							}
-						],
-						"policy": {
-							"timeout": "0.12:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"linkedServiceName": {
-							"referenceName": "LS_FabricSQL_ProcessDB",
-							"type": "LinkedServiceReference"
-						},
-						"typeProperties": {
-							"scripts": [
-								{
-									"type": "Query",
-									"text": {
-										"value": "UPDATE dbo.audit_log\nSET\n    status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Power BI dataset refresh API request failed'\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND stage = 'POWERBI_REFRESH'\n  AND table_id IS NULL\n  AND status = 'IN_PROGRESS';",
-										"type": "Expression"
-									}
-								}
-							],
-							"scriptBlockExecutionTimeout": "02:00:00"
-						}
-					},
-					{
-						"name": "Fail - Dataset Refresh",
-						"type": "Fail",
-						"dependsOn": [
-							{
-								"activity": "Update Dataset Refresh Failed Audit",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"userProperties": [],
-						"typeProperties": {
-							"message": "Power BI dataset refresh API request failed. Check audit_log for details",
-							"errorCode": "POWERBI_REFRESH_FAILED"
-						}
-					}
-				],
-				"policy": {
-					"elapsedTimeMetric": {}
-				},
-				"parameters": {
-					"adf_run_id": {
-						"type": "string"
-					}
-				},
-				"folder": {
-					"name": "SAW_GITHUB"
-				},
-				"annotations": []
-			},
-			"dependsOn": []
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/PL_SILVER_GOLD_MAIN')]",
-			"type": "Microsoft.DataFactory/factories/pipelines",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"activities": [
-					{
-						"name": "Read Table From Source",
-						"type": "Lookup",
-						"dependsOn": [],
-						"policy": {
-							"timeout": "0.12:00:00",
-							"retry": 2,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"source": {
-								"type": "AzureSqlSource",
-								"sqlReaderQuery": {
-									"value": "select table_id ,gold_table_name from ctrl.table_config where is_active=1 and stage='SILVER_TO_GOLD'",
-									"type": "Expression"
-								},
-								"queryTimeout": "02:00:00",
-								"partitionOption": "None"
-							},
-							"dataset": {
-								"referenceName": "DS_AzureSqlTable",
-								"type": "DatasetReference",
-								"parameters": {}
-							},
-							"firstRowOnly": false
-						}
-					},
-					{
-						"name": "Ingest All Table",
-						"type": "ForEach",
-						"dependsOn": [
-							{
-								"activity": "Getting All Notebooks IDs",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"userProperties": [],
-						"typeProperties": {
-							"items": {
-								"value": "@activity('Read Table From Source').output.value",
-								"type": "Expression"
-							},
-							"isSequential": false,
-							"activities": [
-								{
-									"name": "Execute Gold Notebook",
-									"type": "ExecutePipeline",
-									"dependsOn": [
-										{
-											"activity": "InSert In-Progress Status",
-											"dependencyConditions": [
-												"Succeeded"
-											]
-										}
-									],
-									"policy": {
-										"secureInput": false
-									},
-									"userProperties": [],
-									"typeProperties": {
-										"pipeline": {
-											"referenceName": "PL_Execute_Gold_Notebook",
-											"type": "PipelineReference"
-										},
-										"waitOnCompletion": true,
-										"parameters": {
-											"p_gold_table_name": {
-												"value": "@item().gold_table_name",
-												"type": "Expression"
-											},
-											"p_notebooks": {
-												"value": "@activity('Getting All Notebooks IDs').output.value",
-												"type": "Expression"
-											},
-											"adf_run_id": {
-												"value": "@pipeline().parameters.adf_run_id",
-												"type": "Expression"
-											},
-											"table_id": {
-												"value": "@item().table_id",
-												"type": "Expression"
-											}
-										}
-									}
-								},
-								{
-									"name": "InSert In-Progress Status",
-									"type": "Script",
-									"dependsOn": [],
-									"policy": {
-										"timeout": "0.12:00:00",
-										"retry": 2,
-										"retryIntervalInSeconds": 30,
-										"secureOutput": false,
-										"secureInput": false
-									},
-									"userProperties": [],
-									"linkedServiceName": {
-										"referenceName": "LS_AzureSqlDatabase",
-										"type": "LinkedServiceReference"
-									},
-									"typeProperties": {
-										"scripts": [
-											{
-												"type": "Query",
-												"text": {
-													"value": "INSERT INTO ctrl.audit_log (adf_run_id, table_id,status,stage,start_time)\nVALUES ('@{pipeline().parameters.adf_run_id}',@{item().table_id},'In_Progress','SILVER_TO_GOLD',sysutcdatetime())",
-													"type": "Expression"
-												}
-											}
-										],
-										"scriptBlockExecutionTimeout": "02:00:00"
-									}
-								},
-								{
-									"name": "Update Fail Status",
-									"type": "Script",
-									"dependsOn": [
-										{
-											"activity": "Execute Gold Notebook",
-											"dependencyConditions": [
-												"Failed"
-											]
-										}
-									],
-									"policy": {
-										"timeout": "0.12:00:00",
-										"retry": 2,
-										"retryIntervalInSeconds": 30,
-										"secureOutput": false,
-										"secureInput": false
-									},
-									"userProperties": [],
-									"linkedServiceName": {
-										"referenceName": "LS_AzureSqlDatabase",
-										"type": "LinkedServiceReference"
-									},
-									"typeProperties": {
-										"scripts": [
-											{
-												"type": "Query",
-												"text": {
-													"value": "UPDATE ctrl.audit_log\nset status='FAILED',end_time=sysutcdatetime()\nwhere adf_run_id='@{pipeline().parameters.adf_run_id}' and table_id=@{item().table_id}",
-													"type": "Expression"
-												}
-											}
-										],
-										"scriptBlockExecutionTimeout": "02:00:00"
-									}
-								},
-								{
-									"name": "Fail1",
-									"type": "Fail",
-									"dependsOn": [
-										{
-											"activity": "Execute Gold Notebook",
-											"dependencyConditions": [
-												"Failed"
-											]
-										}
-									],
-									"userProperties": [],
-									"typeProperties": {
-										"message": "500",
-										"errorCode": "The inner pipeline failed"
-									}
-								}
-							]
-						}
-					},
-					{
-						"name": "Getting All Notebooks IDs",
-						"type": "WebActivity",
-						"dependsOn": [
-							{
-								"activity": "Read Table From Source",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"policy": {
-							"timeout": "0.12:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"method": "GET",
-							"headers": {},
-							"url": {
-								"value": "https://api.fabric.microsoft.com/v1/workspaces/5aa0e28e-ab58-4dd7-91b4-0b577536312a/notebooks",
-								"type": "Expression"
-							},
-							"authentication": {
-								"type": "MSI",
-								"resource": "https://api.fabric.microsoft.com"
-							}
-						}
-					}
-				],
-				"policy": {
-					"elapsedTimeMetric": {}
-				},
-				"parameters": {
-					"adf_run_id": {
-						"type": "string"
-					}
-				},
-				"folder": {
-					"name": "SAW"
-				},
-				"annotations": []
-			},
-			"dependsOn": []
-		},
-		{
 			"name": "[concat(parameters('factoryName'), '/PL_SOURCE_TO_SILVER_INNER')]",
 			"type": "Microsoft.DataFactory/factories/pipelines",
 			"apiVersion": "2018-06-01",
@@ -947,9 +273,7 @@
 				},
 				"annotations": []
 			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/datasets/DS_PostgreSql')]"
-			]
+			"dependsOn": []
 		},
 		{
 			"name": "[concat(parameters('factoryName'), '/PL_SOURCE_TO_SILVER_INNER_SAW')]",
@@ -1454,18 +778,16 @@
 				},
 				"annotations": []
 			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/datasets/DS_PostgreSql')]"
-			]
+			"dependsOn": []
 		},
 		{
-			"name": "[concat(parameters('factoryName'), '/PL_SOURCE_TO_SILVER_MAIN_SAW_GITHUB')]",
+			"name": "[concat(parameters('factoryName'), '/PL_SOURCE_TO_SILVER_INNER_SAW_GITHUB')]",
 			"type": "Microsoft.DataFactory/factories/pipelines",
 			"apiVersion": "2018-06-01",
 			"properties": {
 				"activities": [
 					{
-						"name": "Read Table From Source",
+						"name": "Read Table Details",
 						"type": "Lookup",
 						"dependsOn": [],
 						"policy": {
@@ -1480,7 +802,7 @@
 							"source": {
 								"type": "AzureSqlSource",
 								"sqlReaderQuery": {
-									"value": "select table_id from dbo.table_config where is_active=1 and source_system='@{pipeline().parameters.source_system}'",
+									"value": "select * from dbo.table_config where table_id=@{pipeline().parameters.table_id}",
 									"type": "Expression"
 								},
 								"queryTimeout": "02:00:00",
@@ -1490,16 +812,38 @@
 								"referenceName": "DS_FabricSQL_ProcessDB",
 								"type": "DatasetReference",
 								"parameters": {}
-							},
-							"firstRowOnly": false
+							}
 						}
 					},
 					{
-						"name": "Ingest All Table",
-						"type": "ForEach",
+						"name": "Set Start Time",
+						"type": "SetVariable",
+						"dependsOn": [],
+						"policy": {
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "start_time",
+							"value": {
+								"value": "@formatDateTime(utcNow(),'yyyy-MM-dd_hh:mm:ss')",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "Check Load Type",
+						"type": "IfCondition",
 						"dependsOn": [
 							{
-								"activity": "Read Table From Source",
+								"activity": "Read Table Details",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							},
+							{
+								"activity": "Set Start Time",
 								"dependencyConditions": [
 									"Succeeded"
 								]
@@ -1507,52 +851,417 @@
 						],
 						"userProperties": [],
 						"typeProperties": {
-							"items": {
-								"value": "@activity('Read Table From Source').output.value",
+							"expression": {
+								"value": "@not(equals(activity('Read Table Details').output.firstRow.load_type,'FULL' ))",
 								"type": "Expression"
 							},
-							"isSequential": false,
-							"activities": [
+							"ifTrueActivities": [
 								{
-									"name": "Ingest From Source To Silver",
-									"type": "ExecutePipeline",
+									"name": "Read Watermark",
+									"type": "Lookup",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "AzureSqlSource",
+											"sqlReaderQuery": {
+												"value": "select watermark_value from dbo.watermark where table_id=@{pipeline().parameters.table_id}",
+												"type": "Expression"
+											},
+											"queryTimeout": "02:00:00",
+											"partitionOption": "None"
+										},
+										"dataset": {
+											"referenceName": "DS_FabricSQL_ProcessDB",
+											"type": "DatasetReference",
+											"parameters": {}
+										}
+									}
+								},
+								{
+									"name": "Store Watermark Value",
+									"type": "SetVariable",
 									"dependsOn": [
 										{
-											"activity": "InSert In-Progress Status",
+											"activity": "Read Watermark",
 											"dependencyConditions": [
 												"Succeeded"
 											]
 										}
 									],
 									"policy": {
+										"secureOutput": false,
 										"secureInput": false
 									},
 									"userProperties": [],
 									"typeProperties": {
-										"pipeline": {
-											"referenceName": "PL_SOURCE_TO_SILVER_INNER_SAW_GITHUB",
-											"type": "PipelineReference"
+										"variableName": "watermark_value",
+										"value": {
+											"value": "@activity('Read Watermark').output.firstRow.watermark_value",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						}
+					},
+					{
+						"name": "Source To Landing Ingestion",
+						"type": "Copy",
+						"dependsOn": [
+							{
+								"activity": "Check Load Type",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 3,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "RestSource",
+								"httpRequestTimeout": "00:01:40",
+								"requestInterval": "00.00:00:00.010",
+								"requestMethod": "GET",
+								"paginationRules": {
+									"supportRFC5988": "true"
+								}
+							},
+							"sink": {
+								"type": "JsonSink",
+								"storeSettings": {
+									"type": "AzureBlobFSWriteSettings"
+								},
+								"formatSettings": {
+									"type": "JsonWriteSettings"
+								}
+							},
+							"enableStaging": false
+						},
+						"inputs": [
+							{
+								"referenceName": "DS_RestAPI",
+								"type": "DatasetReference",
+								"parameters": {
+									"p_relative_url": {
+										"value": "@concat(\n    activity('Read Table Details').output.firstRow.source_relative_url,\n    if(\n        equals(\n            activity('Read Table Details').output.firstRow.url_parameter_strategy,\n            'SINCE_PER_PAGE'\n        ),\n        concat(\n            '?since=',\n            formatDateTime(variables('watermark_value'), 'yyyy-MM-ddTHH:mm:ssZ'),\n            '&',\n            activity('Read Table Details').output.firstRow.source_api_params\n        ),\n        if(\n            equals(\n                activity('Read Table Details').output.firstRow.url_parameter_strategy,\n                'SORT_UPDATED'\n            ),\n            concat(\n                '?sort=updated&direction=desc&',\n                activity('Read Table Details').output.firstRow.source_api_params\n            ),\n            concat(\n                '?',\n                activity('Read Table Details').output.firstRow.source_api_params\n            )\n        )\n    )\n)",
+										"type": "Expression"
+									}
+								}
+							}
+						],
+						"outputs": [
+							{
+								"referenceName": "DS_JSON",
+								"type": "DatasetReference",
+								"parameters": {
+									"container": "landing",
+									"folder": {
+										"value": "@concat(\n    activity('Read Table Details').output.firstRow.source_system,\n    '/',\n    activity('Read Table Details').output.firstRow.source_table_name,\n    '/',\n    variables('start_time')\n)",
+										"type": "Expression"
+									}
+								}
+							}
+						]
+					},
+					{
+						"name": "Landing to Bronze",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "Source To Landing Ingestion",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 2,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"method": "POST",
+							"headers": {},
+							"url": {
+								"value": "https://api.fabric.microsoft.com/v1/workspaces/5aa0e28e-ab58-4dd7-91b4-0b577536312a/notebooks/3377da5b-cb41-4b90-baa6-e3e657ededa1/jobs/execute/instances?beta=false",
+								"type": "Expression"
+							},
+							"body": {
+								"value": "@json(concat(\n'{\"executionData\":{\"compute\":\"Spark\"},\"parameters\":[\n{\"name\":\"p_source_path\",\"value\":\"',\nconcat(\n    'Files/landing/GitHub/',\n    activity('Read Table Details').output.firstRow.source_table_name,\n    '/',\n    variables('start_time')\n),\n'\",\"type\":\"Text\"},\n{\"name\":\"p_target_table\",\"value\":\"',\nactivity('Read Table Details').output.firstRow.silver_table_name,\n'\",\"type\":\"Text\"},\n{\"name\":\"p_load_type\",\"value\":\"',\nactivity('Read Table Details').output.firstRow.load_type,\n'\",\"type\":\"Text\"},\n{\"name\":\"p_landing_timestamp\",\"value\":\"',\nvariables('start_time'),\n'\",\"type\":\"Text\"},\n{\"name\":\"p_source_file_format\",\"value\":\"',\nactivity('Read Table Details').output.firstRow.source_file_format,\n'\",\"type\":\"Text\"}\n]}'\n))\n",
+								"type": "Expression"
+							},
+							"authentication": {
+								"type": "MSI",
+								"resource": "https://api.fabric.microsoft.com"
+							}
+						}
+					},
+					{
+						"name": "Bronze to Silver",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "Condition Check Bronze NB Complete",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 2,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"method": "POST",
+							"headers": {},
+							"url": {
+								"value": "https://api.fabric.microsoft.com/v1/workspaces/5aa0e28e-ab58-4dd7-91b4-0b577536312a/notebooks/05d8c62e-1da9-452f-853d-89706bfdb1e9/jobs/execute/instances?beta=false",
+								"type": "Expression"
+							},
+							"body": {
+								"value": "@json(concat(\n'{\"executionData\":{\"compute\":\"Spark\"},\"parameters\":[\n{\"name\":\"p_source_path\",\"value\":\"',\nconcat(\n    'Files/landing/GitHub/',\n    activity('Read Table Details').output.firstRow.source_table_name,\n    '/',\n    variables('start_time')\n),\n'\",\"type\":\"Text\"},\n{\"name\":\"p_target_table\",\"value\":\"',\nactivity('Read Table Details').output.firstRow.silver_table_name,\n'\",\"type\":\"Text\"},\n{\"name\":\"p_landing_timestamp\",\"value\":\"',\nvariables('start_time'),\n'\",\"type\":\"Text\"},\n{\"name\":\"p_load_type\",\"value\":\"',\nactivity('Read Table Details').output.firstRow.load_type,\n'\",\"type\":\"Text\"},\n{\"name\":\"p_merge_keys\",\"value\":\"',\nactivity('Read Table Details').output.firstRow.merge_keys,\n'\",\"type\":\"Text\"},\n{\"name\":\"p_source_file_format\",\"value\":\"',\nactivity('Read Table Details').output.firstRow.source_file_format,\n'\",\"type\":\"Text\"}\n]}'\n))\n",
+								"type": "Expression"
+							},
+							"authentication": {
+								"type": "MSI",
+								"resource": "https://api.fabric.microsoft.com"
+							}
+						}
+					},
+					{
+						"name": "Update Success Status",
+						"type": "Script",
+						"dependsOn": [
+							{
+								"activity": "Get Silver Notebook Result",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 2,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "LS_FabricSQL_ProcessDB",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "Query",
+									"text": {
+										"value": "UPDATE dbo.audit_log\nSET status = 'SUCCESS',\n    end_time = SYSUTCDATETIME(),\n    records_read = @{activity('Source To Landing Ingestion').output.rowsRead},\n    records_written = @{int(coalesce(activity('Get Silver Notebook Result').output.properties.exitValue,'0'))}\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND table_id = @{pipeline().parameters.table_id};",
+										"type": "Expression"
+									}
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					},
+					{
+						"name": "Get Silver Notebook Result",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "Condition Check Silver NB Complete",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"method": "GET",
+							"headers": {},
+							"url": {
+								"value": "@concat(\n'https://api.fabric.microsoft.com/v1/workspaces/5aa0e28e-ab58-4dd7-91b4-0b577536312a/notebooks/05d8c62e-1da9-452f-853d-89706bfdb1e9/jobs/execute/instances/',\nactivity('Bronze to Silver').output.id,\n'?beta=true'\n)",
+								"type": "Expression"
+							},
+							"authentication": {
+								"type": "MSI",
+								"resource": "https://api.fabric.microsoft.com"
+							}
+						}
+					},
+					{
+						"name": "Update Watermark Column",
+						"type": "Script",
+						"dependsOn": [
+							{
+								"activity": "Get Silver Notebook Result",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "LS_FabricSQL_ProcessDB",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "Query",
+									"text": {
+										"value": "update dbo.watermark \nset watermark_value = sysutcdatetime()\nwhere table_id=@{pipeline().parameters.table_id}",
+										"type": "Expression"
+									}
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					},
+					{
+						"name": "Until_Bronze_Notebook_Completion",
+						"type": "Until",
+						"dependsOn": [
+							{
+								"activity": "Landing to Bronze",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@or(\n    equals(activity('Get_Notebook_Status landing_to_bronze').output.status,'Completed'),\n    equals(activity('Get_Notebook_Status landing_to_bronze').output.status,'Failed')\n)",
+								"type": "Expression"
+							},
+							"activities": [
+								{
+									"name": "Get_Notebook_Status landing_to_bronze",
+									"type": "WebActivity",
+									"dependsOn": [
+										{
+											"activity": "Wait for bronze NB to complete",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"method": "GET",
+										"headers": {},
+										"url": {
+											"value": "@concat(\n    'https://api.fabric.microsoft.com/v1/workspaces/5aa0e28e-ab58-4dd7-91b4-0b577536312a/notebooks/3377da5b-cb41-4b90-baa6-e3e657ededa1/jobs/execute/instances/',\n    activity('Landing to Bronze').output.id,\n    '?beta=true'\n)",
+											"type": "Expression"
 										},
-										"waitOnCompletion": true,
-										"parameters": {
-											"table_id": {
-												"value": "@item().table_id",
-												"type": "Expression"
-											},
-											"adf_run_id": {
-												"value": "@pipeline().parameters.adf_run_id",
-												"type": "Expression"
-											}
+										"authentication": {
+											"type": "MSI",
+											"resource": "https://api.fabric.microsoft.com"
 										}
 									}
 								},
 								{
-									"name": "InSert In-Progress Status",
+									"name": "Wait for bronze NB to complete",
+									"type": "Wait",
+									"dependsOn": [],
+									"userProperties": [],
+									"typeProperties": {
+										"waitTimeInSeconds": 60
+									}
+								}
+							],
+							"timeout": "0.00:59:00"
+						}
+					},
+					{
+						"name": "Condition Check Bronze NB Complete",
+						"type": "IfCondition",
+						"dependsOn": [
+							{
+								"activity": "Until_Bronze_Notebook_Completion",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@equals(activity('Get_Notebook_Status landing_to_bronze').output.status,'Completed')",
+								"type": "Expression"
+							},
+							"ifFalseActivities": [
+								{
+									"name": "Fail Bronze Notebook",
+									"type": "Fail",
+									"dependsOn": [
+										{
+											"activity": "Update Failed Bronze NB Status",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"message": {
+											"value": "@concat('Bronze notebook failed for table id: ', pipeline().parameters.table_id)",
+											"type": "Expression"
+										},
+										"errorCode": "BRONZE_NOTEBOOK_FAILED"
+									}
+								},
+								{
+									"name": "Update Failed Bronze NB Status",
 									"type": "Script",
 									"dependsOn": [],
 									"policy": {
 										"timeout": "0.12:00:00",
-										"retry": 2,
+										"retry": 0,
 										"retryIntervalInSeconds": 30,
 										"secureOutput": false,
 										"secureInput": false
@@ -1567,56 +1276,104 @@
 											{
 												"type": "Query",
 												"text": {
-													"value": "INSERT INTO dbo.audit_log (adf_run_id, table_id,status,stage,start_time)\nVALUES ('@{pipeline().parameters.adf_run_id}',@{item().table_id},'In_Progress','SOURCE_TO_SILVER',sysutcdatetime())",
+													"value": "UPDATE dbo.audit_log\nSET\n    status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Landing to Bronze notebook failed'\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND table_id = @{pipeline().parameters.table_id};",
 													"type": "Expression"
 												}
 											}
 										],
 										"scriptBlockExecutionTimeout": "02:00:00"
 									}
-								},
+								}
+							]
+						}
+					},
+					{
+						"name": "Until_SIlver Notebook_Completion",
+						"type": "Until",
+						"dependsOn": [
+							{
+								"activity": "Bronze to Silver",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@or(\n    equals(activity('Get_Notebook_Status_bronze_to_silver').output.status,'Completed'),\n    equals(activity('Get_Notebook_Status_bronze_to_silver').output.status,'Failed')\n)",
+								"type": "Expression"
+							},
+							"activities": [
 								{
-									"name": "Update Fail Status",
-									"type": "Script",
+									"name": "Get_Notebook_Status_bronze_to_silver",
+									"type": "WebActivity",
 									"dependsOn": [
 										{
-											"activity": "Ingest From Source To Silver",
+											"activity": "Wait for silver NB to complete",
 											"dependencyConditions": [
-												"Failed"
+												"Succeeded"
 											]
 										}
 									],
 									"policy": {
 										"timeout": "0.12:00:00",
-										"retry": 2,
+										"retry": 0,
 										"retryIntervalInSeconds": 30,
 										"secureOutput": false,
 										"secureInput": false
 									},
 									"userProperties": [],
-									"linkedServiceName": {
-										"referenceName": "LS_FabricSQL_ProcessDB",
-										"type": "LinkedServiceReference"
-									},
 									"typeProperties": {
-										"scripts": [
-											{
-												"type": "Query",
-												"text": {
-													"value": "UPDATE dbo.audit_log\nset status='FAILED',end_time=sysutcdatetime()\nwhere adf_run_id='@{pipeline().parameters.adf_run_id}' and table_id=@{item().table_id}",
-													"type": "Expression"
-												}
-											}
-										],
-										"scriptBlockExecutionTimeout": "02:00:00"
+										"method": "GET",
+										"headers": {},
+										"url": {
+											"value": "@concat(\n    'https://api.fabric.microsoft.com/v1/workspaces/5aa0e28e-ab58-4dd7-91b4-0b577536312a/notebooks/05d8c62e-1da9-452f-853d-89706bfdb1e9/jobs/execute/instances/',\n    activity('Bronze to Silver').output.id,\n    '?beta=true'\n)",
+											"type": "Expression"
+										},
+										"authentication": {
+											"type": "MSI",
+											"resource": "https://api.fabric.microsoft.com"
+										}
 									}
 								},
 								{
-									"name": "Fail1",
+									"name": "Wait for silver NB to complete",
+									"type": "Wait",
+									"dependsOn": [],
+									"userProperties": [],
+									"typeProperties": {
+										"waitTimeInSeconds": 60
+									}
+								}
+							],
+							"timeout": "0.00:59:00"
+						}
+					},
+					{
+						"name": "Condition Check Silver NB Complete",
+						"type": "IfCondition",
+						"dependsOn": [
+							{
+								"activity": "Until_SIlver Notebook_Completion",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@equals(activity('Get_Notebook_Status_bronze_to_silver').output.status,'Completed')",
+								"type": "Expression"
+							},
+							"ifFalseActivities": [
+								{
+									"name": "Fail Silver Notebook",
 									"type": "Fail",
 									"dependsOn": [
 										{
-											"activity": "Update Fail Status",
+											"activity": "Update Failed Silver NB Status",
 											"dependencyConditions": [
 												"Succeeded"
 											]
@@ -1624,8 +1381,448 @@
 									],
 									"userProperties": [],
 									"typeProperties": {
-										"message": "500",
-										"errorCode": "The inner pipeline failed"
+										"message": {
+											"value": "@concat('Silver notebook failed table id : ', pipeline().parameters.table_id)",
+											"type": "Expression"
+										},
+										"errorCode": "SILVER_NOTEBOOK_FAILED"
+									}
+								},
+								{
+									"name": "Update Failed Silver NB Status",
+									"type": "Script",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"linkedServiceName": {
+										"referenceName": "LS_FabricSQL_ProcessDB",
+										"type": "LinkedServiceReference"
+									},
+									"typeProperties": {
+										"scripts": [
+											{
+												"type": "Query",
+												"text": {
+													"value": "UPDATE dbo.audit_log\nSET\n    status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Bronze to Silver notebook failed'\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND table_id = @{pipeline().parameters.table_id};",
+													"type": "Expression"
+												}
+											}
+										],
+										"scriptBlockExecutionTimeout": "02:00:00"
+									}
+								}
+							]
+						}
+					},
+					{
+						"name": "Bronze Notebook Failed",
+						"type": "Script",
+						"dependsOn": [
+							{
+								"activity": "Until_Bronze_Notebook_Completion",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "LS_FabricSQL_ProcessDB",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "Query",
+									"text": {
+										"value": "UPDATE dbo.audit_log\nSET\n    status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Bronze notebook polling failed: timeout or status API error'\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND table_id = @{pipeline().parameters.table_id};",
+										"type": "Expression"
+									}
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					},
+					{
+						"name": "Silver Notebook Failed",
+						"type": "Script",
+						"dependsOn": [
+							{
+								"activity": "Until_SIlver Notebook_Completion",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "LS_FabricSQL_ProcessDB",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "Query",
+									"text": {
+										"value": "UPDATE dbo.audit_log\nSET\n    status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Silver notebook polling failed: timeout or status API error'\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND table_id = @{pipeline().parameters.table_id};",
+										"type": "Expression"
+									}
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					},
+					{
+						"name": "Fail Bronze Polling",
+						"type": "Fail",
+						"dependsOn": [
+							{
+								"activity": "Bronze Notebook Failed",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"message": {
+								"value": "@concat(\n    'Bronze notebook polling failed for table_id: ',\n    pipeline().parameters.table_id,\n    '. Check notebook execution status, GET API response or polling timeout.'\n)",
+								"type": "Expression"
+							},
+							"errorCode": "BRONZE_POLLING_FAILED"
+						}
+					},
+					{
+						"name": "Fail Silver Polling",
+						"type": "Fail",
+						"dependsOn": [
+							{
+								"activity": "Silver Notebook Failed",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"message": {
+								"value": "@concat(\n    'Silver notebook polling failed for table_id: ',\n    pipeline().parameters.table_id,\n    '. Check notebook execution status, GET API response or polling timeout.'\n)",
+								"type": "Expression"
+							},
+							"errorCode": "SILVER_POLLING_FAILED"
+						}
+					},
+					{
+						"name": "Update Failed Bronze POST Status",
+						"type": "Script",
+						"dependsOn": [
+							{
+								"activity": "Landing to Bronze",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "LS_FabricSQL_ProcessDB",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "Query",
+									"text": {
+										"value": "UPDATE dbo.audit_log\nSET\n    status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Landing to Bronze notebook POST request failed'\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND table_id = @{pipeline().parameters.table_id};",
+										"type": "Expression"
+									}
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					},
+					{
+						"name": "Fail Bronze POST",
+						"type": "Fail",
+						"dependsOn": [
+							{
+								"activity": "Update Failed Bronze POST Status",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"message": {
+								"value": "@concat(\n    'Bronze notebook POST request failed for table_id: ',\n    pipeline().parameters.table_id,\n    '. Check Fabric API response, authentication or notebook execution request.'\n)",
+								"type": "Expression"
+							},
+							"errorCode": "BRONZE_POST_FAILED"
+						}
+					},
+					{
+						"name": "Update Failed Silver POST Status",
+						"type": "Script",
+						"dependsOn": [
+							{
+								"activity": "Bronze to Silver",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "LS_FabricSQL_ProcessDB",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "Query",
+									"text": {
+										"value": "UPDATE dbo.audit_log\nSET\n    status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Bronze to Silver notebook POST request failed'\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND table_id = @{pipeline().parameters.table_id};",
+										"type": "Expression"
+									}
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					},
+					{
+						"name": "Fail Silver POST",
+						"type": "Fail",
+						"dependsOn": [
+							{
+								"activity": "Update Failed Silver POST Status",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"message": {
+								"value": "@concat(\n    'Silver notebook POST request failed for table_id: ',\n    pipeline().parameters.table_id,\n    '. Check Fabric API response, authentication or notebook execution request.'\n)",
+								"type": "Expression"
+							},
+							"errorCode": "SILVER_POST_FAILED"
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"parameters": {
+					"table_id": {
+						"type": "string",
+						"defaultValue": "6"
+					},
+					"adf_run_id": {
+						"type": "string"
+					}
+				},
+				"variables": {
+					"start_time": {
+						"type": "String"
+					},
+					"watermark_value": {
+						"type": "String"
+					}
+				},
+				"folder": {
+					"name": "SAW_GITHUB"
+				},
+				"annotations": []
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/pipeline2')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "Read Table Details",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 2,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": {
+									"value": "select * from dbo.table_config where table_id=@{pipeline().parameters.table_id}",
+									"type": "Expression"
+								},
+								"queryTimeout": "02:00:00",
+								"partitionOption": "None"
+							},
+							"dataset": {
+								"referenceName": "DS_FabricSQL_ProcessDB",
+								"type": "DatasetReference",
+								"parameters": {}
+							}
+						}
+					},
+					{
+						"name": "Set variable1",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "Check Load Type",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "p_relative_url",
+							"value": {
+								"value": "@concat(\n    activity('Read Table Details').output.firstRow.source_relative_url,\n    if(\n        equals(\n            activity('Read Table Details').output.firstRow.url_parameter_strategy,\n            'SINCE_PER_PAGE'\n        ),\n        concat(\n            '?since=',\n            formatDateTime(variables('watermark_value'), 'yyyy-MM-ddTHH:mm:ssZ'),\n            '&',\n            activity('Read Table Details').output.firstRow.source_api_params\n        ),\n        if(\n            equals(\n                activity('Read Table Details').output.firstRow.url_parameter_strategy,\n                'SORT_UPDATED'\n            ),\n            concat(\n                '?sort=updated&direction=desc&',\n                activity('Read Table Details').output.firstRow.source_api_params\n            ),\n            concat(\n                '?',\n                activity('Read Table Details').output.firstRow.source_api_params\n            )\n        )\n    )\n)",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "Set Start Time",
+						"type": "SetVariable",
+						"dependsOn": [],
+						"policy": {
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "start_time",
+							"value": {
+								"value": "@formatDateTime(utcNow(),'yyyy-MM-dd_hh:mm:ss')",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "Check Load Type",
+						"type": "IfCondition",
+						"dependsOn": [
+							{
+								"activity": "Set Start Time",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							},
+							{
+								"activity": "Read Table Details",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@not(equals(activity('Read Table Details').output.firstRow.load_type,'FULL' ))",
+								"type": "Expression"
+							},
+							"ifTrueActivities": [
+								{
+									"name": "Read Watermark",
+									"type": "Lookup",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "AzureSqlSource",
+											"sqlReaderQuery": {
+												"value": "select watermark_value from dbo.watermark where table_id=@{pipeline().parameters.table_id}",
+												"type": "Expression"
+											},
+											"queryTimeout": "02:00:00",
+											"partitionOption": "None"
+										},
+										"dataset": {
+											"referenceName": "DS_FabricSQL_ProcessDB",
+											"type": "DatasetReference",
+											"parameters": {}
+										}
+									}
+								},
+								{
+									"name": "Store Watermark Value",
+									"type": "SetVariable",
+									"dependsOn": [
+										{
+											"activity": "Read Watermark",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"variableName": "watermark_value",
+										"value": {
+											"value": "@activity('Read Watermark').output.firstRow.watermark_value",
+											"type": "Expression"
+										}
 									}
 								}
 							]
@@ -1636,17 +1833,20 @@
 					"elapsedTimeMetric": {}
 				},
 				"parameters": {
-					"source_system": {
-						"type": "string",
-						"defaultValue": "GitHub"
-					},
-					"adf_run_id": {
-						"type": "string",
-						"defaultValue": "a99"
+					"table_id": {
+						"type": "int"
 					}
 				},
-				"folder": {
-					"name": "SAW_GITHUB"
+				"variables": {
+					"p_relative_url": {
+						"type": "String"
+					},
+					"watermark_value": {
+						"type": "String"
+					},
+					"start_time": {
+						"type": "String"
+					}
 				},
 				"annotations": []
 			},
@@ -1719,52 +1919,36 @@
 				},
 				"annotations": []
 			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/datasets/DS_PostgreSql')]"
-			]
+			"dependsOn": []
 		},
 		{
-			"name": "[concat(parameters('factoryName'), '/PL_SILVER_GOLD_MAIN_GITHUB')]",
+			"name": "[concat(parameters('factoryName'), '/PL_Execute_Gold_Notebook_GITHUB')]",
 			"type": "Microsoft.DataFactory/factories/pipelines",
 			"apiVersion": "2018-06-01",
 			"properties": {
 				"activities": [
 					{
-						"name": "Read Table From Source",
-						"type": "Lookup",
+						"name": "Filter Notebook",
+						"type": "Filter",
 						"dependsOn": [],
-						"policy": {
-							"timeout": "0.12:00:00",
-							"retry": 2,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
 						"userProperties": [],
 						"typeProperties": {
-							"source": {
-								"type": "AzureSqlSource",
-								"sqlReaderQuery": {
-									"value": "select table_id ,gold_table_name from dbo.table_config where is_active=1 and stage='SILVER_TO_GOLD' and table_type='@{pipeline().parameters.table_type}'",
-									"type": "Expression"
-								},
-								"queryTimeout": "02:00:00",
-								"partitionOption": "None"
+							"items": {
+								"value": "@pipeline().parameters.p_notebooks",
+								"type": "Expression"
 							},
-							"dataset": {
-								"referenceName": "DS_FabricSQL_ProcessDB",
-								"type": "DatasetReference",
-								"parameters": {}
-							},
-							"firstRowOnly": false
+							"condition": {
+								"value": "@equals(\n    toUpper(item().displayName),\n    toUpper(concat('NB_Gold_', pipeline().parameters.p_gold_table_name))\n)",
+								"type": "Expression"
+							}
 						}
 					},
 					{
-						"name": "Ingest All Table",
-						"type": "ForEach",
+						"name": "Condition Notebook Exists",
+						"type": "IfCondition",
 						"dependsOn": [
 							{
-								"activity": "Getting All Notebooks IDs",
+								"activity": "Filter Notebook",
 								"dependencyConditions": [
 									"Succeeded"
 								]
@@ -1772,40 +1956,76 @@
 						],
 						"userProperties": [],
 						"typeProperties": {
-							"items": {
-								"value": "@activity('Read Table From Source').output.value",
+							"expression": {
+								"value": "@greater(length(activity('Filter Notebook').output.Value), 0)",
 								"type": "Expression"
 							},
-							"isSequential": false,
-							"activities": [
+							"ifFalseActivities": [
 								{
-									"name": "Execute Gold Notebook",
-									"type": "ExecutePipeline",
+									"name": "Update Gold Notebook Not Found Status",
+									"type": "Script",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"linkedServiceName": {
+										"referenceName": "LS_FabricSQL_ProcessDB",
+										"type": "LinkedServiceReference"
+									},
+									"typeProperties": {
+										"scripts": [
+											{
+												"type": "Query",
+												"text": {
+													"value": "UPDATE dbo.audit_log\nSET\n    status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Gold notebook not found in workspace'\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND table_id = @{pipeline().parameters.table_id};",
+													"type": "Expression"
+												}
+											}
+										],
+										"scriptBlockExecutionTimeout": "02:00:00"
+									}
+								},
+								{
+									"name": "Fail Gold Notebook Not Found",
+									"type": "Fail",
 									"dependsOn": [
 										{
-											"activity": "InSert In-Progress Status",
+											"activity": "Update Gold Notebook Not Found Status",
 											"dependencyConditions": [
 												"Succeeded"
 											]
 										}
 									],
+									"userProperties": [],
+									"typeProperties": {
+										"message": "No matching Gold notebook found in the Fabric workspace.",
+										"errorCode": "GOLD_NOTEBOOK_NOT_FOUND"
+									}
+								}
+							],
+							"ifTrueActivities": [
+								{
+									"name": "Execute Gold Notebook Pipeline",
+									"type": "ExecutePipeline",
+									"dependsOn": [],
 									"policy": {
 										"secureInput": false
 									},
 									"userProperties": [],
 									"typeProperties": {
 										"pipeline": {
-											"referenceName": "PL_Execute_Gold_Notebook_GITHUB",
+											"referenceName": "PL_Run_Gold_Notebook",
 											"type": "PipelineReference"
 										},
 										"waitOnCompletion": true,
 										"parameters": {
 											"p_gold_table_name": {
-												"value": "@item().gold_table_name",
-												"type": "Expression"
-											},
-											"p_notebooks": {
-												"value": "@activity('Getting All Notebooks IDs').output.value",
+												"value": "@pipeline().parameters.p_gold_table_name",
 												"type": "Expression"
 											},
 											"adf_run_id": {
@@ -1813,180 +2033,17 @@
 												"type": "Expression"
 											},
 											"table_id": {
-												"value": "@item().table_id",
+												"value": "@pipeline().parameters.table_id",
+												"type": "Expression"
+											},
+											"p_notebook_id": {
+												"value": "@activity('Filter Notebook').output.Value[0].id",
 												"type": "Expression"
 											}
 										}
 									}
-								},
-								{
-									"name": "InSert In-Progress Status",
-									"type": "Script",
-									"dependsOn": [],
-									"policy": {
-										"timeout": "0.12:00:00",
-										"retry": 2,
-										"retryIntervalInSeconds": 30,
-										"secureOutput": false,
-										"secureInput": false
-									},
-									"userProperties": [],
-									"linkedServiceName": {
-										"referenceName": "LS_FabricSQL_ProcessDB",
-										"type": "LinkedServiceReference"
-									},
-									"typeProperties": {
-										"scripts": [
-											{
-												"type": "Query",
-												"text": {
-													"value": "INSERT INTO dbo.audit_log (adf_run_id, table_id,status,stage,start_time)\nVALUES ('@{pipeline().parameters.adf_run_id}',@{item().table_id},'In_Progress','SILVER_TO_GOLD',sysutcdatetime())",
-													"type": "Expression"
-												}
-											}
-										],
-										"scriptBlockExecutionTimeout": "02:00:00"
-									}
-								},
-								{
-									"name": "Update Fail Status",
-									"type": "Script",
-									"dependsOn": [
-										{
-											"activity": "Execute Gold Notebook",
-											"dependencyConditions": [
-												"Failed"
-											]
-										}
-									],
-									"policy": {
-										"timeout": "0.12:00:00",
-										"retry": 2,
-										"retryIntervalInSeconds": 30,
-										"secureOutput": false,
-										"secureInput": false
-									},
-									"userProperties": [],
-									"linkedServiceName": {
-										"referenceName": "LS_FabricSQL_ProcessDB",
-										"type": "LinkedServiceReference"
-									},
-									"typeProperties": {
-										"scripts": [
-											{
-												"type": "Query",
-												"text": {
-													"value": "UPDATE dbo.audit_log\nSET\n    status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Gold notebook pipeline execution failed'\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND table_id = @{item().table_id}\n  AND stage = 'SILVER_TO_GOLD';",
-													"type": "Expression"
-												}
-											}
-										],
-										"scriptBlockExecutionTimeout": "02:00:00"
-									}
-								},
-								{
-									"name": "Fail Gold Notebook Pipeline",
-									"type": "Fail",
-									"dependsOn": [
-										{
-											"activity": "Update Fail Status",
-											"dependencyConditions": [
-												"Succeeded"
-											]
-										}
-									],
-									"userProperties": [],
-									"typeProperties": {
-										"message": "Gold notebook execution failed",
-										"errorCode": "GOLD_PIPELINE_FAILED"
-									}
 								}
 							]
-						}
-					},
-					{
-						"name": "Getting All Notebooks IDs",
-						"type": "WebActivity",
-						"dependsOn": [
-							{
-								"activity": "Read Table From Source",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"policy": {
-							"timeout": "0.12:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"method": "GET",
-							"headers": {},
-							"url": {
-								"value": "https://api.fabric.microsoft.com/v1/workspaces/5aa0e28e-ab58-4dd7-91b4-0b577536312a/notebooks",
-								"type": "Expression"
-							},
-							"authentication": {
-								"type": "MSI",
-								"resource": "https://api.fabric.microsoft.com"
-							}
-						}
-					},
-					{
-						"name": "Getting Notebooks ID Failed",
-						"type": "Fail",
-						"dependsOn": [
-							{
-								"activity": "Update Notebook Discovery Failed Audit",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"userProperties": [],
-						"typeProperties": {
-							"message": "Getting Notebooks ID Failed",
-							"errorCode": "Getting Notebooks ID Failed"
-						}
-					},
-					{
-						"name": "Update Notebook Discovery Failed Audit",
-						"type": "Script",
-						"dependsOn": [
-							{
-								"activity": "Getting All Notebooks IDs",
-								"dependencyConditions": [
-									"Failed"
-								]
-							}
-						],
-						"policy": {
-							"timeout": "0.12:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"linkedServiceName": {
-							"referenceName": "LS_FabricSQL_ProcessDB",
-							"type": "LinkedServiceReference"
-						},
-						"typeProperties": {
-							"scripts": [
-								{
-									"type": "Query",
-									"text": {
-										"value": "MERGE dbo.audit_log AS tgt\nUSING\n(\n    SELECT table_id\n    FROM dbo.table_config\n    WHERE is_active = 1\n      AND stage = 'SILVER_TO_GOLD'\n      AND table_type = '@{pipeline().parameters.table_type}'\n) AS src\nON  tgt.adf_run_id = '@{pipeline().parameters.adf_run_id}'\nAND tgt.table_id = src.table_id\nAND tgt.stage = 'SILVER_TO_GOLD'\n\nWHEN MATCHED THEN\n    UPDATE SET\n        status = 'FAILED',\n        end_time = SYSUTCDATETIME(),\n        error_message = 'Failed to retrieve Fabric notebook list'\n\nWHEN NOT MATCHED THEN\n    INSERT\n    (\n        adf_run_id,\n        table_id,\n        status,\n        stage,\n        start_time,\n        end_time,\n        error_message\n    )\n    VALUES\n    (\n        '@{pipeline().parameters.adf_run_id}',\n        src.table_id,\n        'FAILED',\n        'SILVER_TO_GOLD',\n        SYSUTCDATETIME(),\n        SYSUTCDATETIME(),\n        'Failed to retrieve Fabric notebook list'\n    );",
-										"type": "Expression"
-									}
-								}
-							],
-							"scriptBlockExecutionTimeout": "02:00:00"
 						}
 					}
 				],
@@ -1994,11 +2051,22 @@
 					"elapsedTimeMetric": {}
 				},
 				"parameters": {
+					"p_gold_table_name": {
+						"type": "string"
+					},
+					"p_notebooks": {
+						"type": "array"
+					},
 					"adf_run_id": {
 						"type": "string"
 					},
-					"table_type": {
+					"table_id": {
 						"type": "string"
+					}
+				},
+				"variables": {
+					"v_job_status_url": {
+						"type": "String"
 					}
 				},
 				"folder": {
@@ -2006,9 +2074,7 @@
 				},
 				"annotations": []
 			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/pipelines/PL_Execute_Gold_Notebook_GITHUB')]"
-			]
+			"dependsOn": []
 		},
 		{
 			"name": "[concat(parameters('factoryName'), '/PL_SEND_EMAIL')]",
@@ -2229,6 +2295,280 @@
 				},
 				"folder": {
 					"name": "SAW"
+				},
+				"annotations": []
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/PL_DATASET_REFRESH')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "Lookup_API_Body",
+						"type": "Lookup",
+						"dependsOn": [
+							{
+								"activity": "Insert Refresh In-Progress Audit",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": "SELECT\n    JSON_QUERY(\n        '[' +\n        STRING_AGG(\n            CAST(\n                '{\"table\":\"' + TableName +\n                '\",\"partition\":\"' + PartitionName + '\"}'\n                AS NVARCHAR(MAX)\n            ),\n            ','\n        ) +\n        ']'\n    ) AS APIBody\nFROM dbo.PowerBIRefreshConfig\nWHERE DatasetID = 'b8aa8fb0-bed3-4f28-ba20-8ca0d114d5e0'\n  AND RunFlag = 1;",
+								"queryTimeout": "02:00:00",
+								"partitionOption": "None"
+							},
+							"dataset": {
+								"referenceName": "DS_FabricSQL_ProcessDB",
+								"type": "DatasetReference",
+								"parameters": {}
+							}
+						}
+					},
+					{
+						"name": "Dataset Refresh",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "Lookup_API_Body",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"method": "POST",
+							"headers": {
+								"Content-Type": "application/json"
+							},
+							"url": {
+								"value": "@concat(\n'https://api.powerbi.com/v1.0/myorg/groups/',\n'5aa0e28e-ab58-4dd7-91b4-0b577536312a',\n'/datasets/',\n'b8aa8fb0-bed3-4f28-ba20-8ca0d114d5e0',\n'/refreshes'\n)",
+								"type": "Expression"
+							},
+							"body": {
+								"value": "{\n  \"type\": \"full\",\n  \"commitMode\": \"transactional\",\n  \"maxParallelism\": 300,\n  \"retryCount\": 1,\n  \"objects\": @{activity('Lookup_API_Body').output.firstRow.APIBody}\n}",
+								"type": "Expression"
+							},
+							"authentication": {
+								"type": "ServicePrincipal",
+								"userTenant": "0debf8d3-fbc0-4a42-b6c8-5a3832fc8daa",
+								"username": "991dc376-7920-4dc6-b784-f5bebb576e6e",
+								"resource": "https://analysis.windows.net/powerbi/api",
+								"password": {
+									"type": "AzureKeyVaultSecret",
+									"store": {
+										"referenceName": "LS_KeyVoult",
+										"type": "LinkedServiceReference"
+									},
+									"secretName": "datasetrefreshapi"
+								}
+							}
+						}
+					},
+					{
+						"name": "Insert Refresh In-Progress Audit",
+						"type": "Script",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "LS_FabricSQL_ProcessDB",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "Query",
+									"text": {
+										"value": "INSERT INTO dbo.audit_log\n(\n    adf_run_id,\n    table_id,\n    stage,\n    status,\n    start_time,\n    created_timestamp\n)\nVALUES\n(\n    '@{pipeline().parameters.adf_run_id}',\n    NULL,\n    'POWERBI_REFRESH',\n    'IN_PROGRESS',\n    SYSUTCDATETIME(),\n    SYSUTCDATETIME()\n);",
+										"type": "Expression"
+									}
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					},
+					{
+						"name": "Update Lookup Refresh Failed Audit",
+						"type": "Script",
+						"dependsOn": [
+							{
+								"activity": "Lookup_API_Body",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "LS_FabricSQL_ProcessDB",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "Query",
+									"text": {
+										"value": "UPDATE dbo.audit_log\nSET\n    status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Failed to retrieve Power BI refresh configuration'\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND stage = 'POWERBI_REFRESH'\n  AND table_id IS NULL;",
+										"type": "Expression"
+									}
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					},
+					{
+						"name": "Fail - Power BI Lookup",
+						"type": "Fail",
+						"dependsOn": [
+							{
+								"activity": "Update Lookup Refresh Failed Audit",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"message": "Power BI dataset refresh API request failed. Check PL_DATASET_REFRESH execution logs and audit_log for details.",
+							"errorCode": "POWERBI_REFRESH_FAILED"
+						}
+					},
+					{
+						"name": "Update Dataset Refresh Success Audit",
+						"type": "Script",
+						"dependsOn": [
+							{
+								"activity": "Dataset Refresh",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "LS_FabricSQL_ProcessDB",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "Query",
+									"text": {
+										"value": "UPDATE dbo.audit_log\nSET\n    status = 'SUCCESS',\n    end_time = SYSUTCDATETIME(),\n    error_message = NULL\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND stage = 'POWERBI_REFRESH'\n  AND table_id IS NULL;",
+										"type": "Expression"
+									}
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					},
+					{
+						"name": "Update Dataset Refresh Failed Audit",
+						"type": "Script",
+						"dependsOn": [
+							{
+								"activity": "Dataset Refresh",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "LS_FabricSQL_ProcessDB",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "Query",
+									"text": {
+										"value": "UPDATE dbo.audit_log\nSET\n    status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Power BI dataset refresh API request failed'\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND stage = 'POWERBI_REFRESH'\n  AND table_id IS NULL\n  AND status = 'IN_PROGRESS';",
+										"type": "Expression"
+									}
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					},
+					{
+						"name": "Fail - Dataset Refresh",
+						"type": "Fail",
+						"dependsOn": [
+							{
+								"activity": "Update Dataset Refresh Failed Audit",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"message": "Power BI dataset refresh API request failed. Check audit_log for details",
+							"errorCode": "POWERBI_REFRESH_FAILED"
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"parameters": {
+					"adf_run_id": {
+						"type": "string"
+					}
+				},
+				"folder": {
+					"name": "SAW_GITHUB"
 				},
 				"annotations": []
 			},
@@ -2611,6 +2951,672 @@
 			]
 		},
 		{
+			"name": "[concat(parameters('factoryName'), '/PL_SOURCE_TO_SILVER_MAIN_SAW_GITHUB')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "Read Table From Source",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 2,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": {
+									"value": "select table_id from dbo.table_config where is_active=1 and source_system='@{pipeline().parameters.source_system}'",
+									"type": "Expression"
+								},
+								"queryTimeout": "02:00:00",
+								"partitionOption": "None"
+							},
+							"dataset": {
+								"referenceName": "DS_FabricSQL_ProcessDB",
+								"type": "DatasetReference",
+								"parameters": {}
+							},
+							"firstRowOnly": false
+						}
+					},
+					{
+						"name": "Ingest All Table",
+						"type": "ForEach",
+						"dependsOn": [
+							{
+								"activity": "Read Table From Source",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('Read Table From Source').output.value",
+								"type": "Expression"
+							},
+							"isSequential": false,
+							"activities": [
+								{
+									"name": "Ingest From Source To Silver",
+									"type": "ExecutePipeline",
+									"dependsOn": [
+										{
+											"activity": "InSert In-Progress Status",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"pipeline": {
+											"referenceName": "PL_SOURCE_TO_SILVER_INNER_SAW_GITHUB",
+											"type": "PipelineReference"
+										},
+										"waitOnCompletion": true,
+										"parameters": {
+											"table_id": {
+												"value": "@item().table_id",
+												"type": "Expression"
+											},
+											"adf_run_id": {
+												"value": "@pipeline().parameters.adf_run_id",
+												"type": "Expression"
+											}
+										}
+									}
+								},
+								{
+									"name": "InSert In-Progress Status",
+									"type": "Script",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 2,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"linkedServiceName": {
+										"referenceName": "LS_FabricSQL_ProcessDB",
+										"type": "LinkedServiceReference"
+									},
+									"typeProperties": {
+										"scripts": [
+											{
+												"type": "Query",
+												"text": {
+													"value": "INSERT INTO dbo.audit_log (adf_run_id, table_id,status,stage,start_time)\nVALUES ('@{pipeline().parameters.adf_run_id}',@{item().table_id},'In_Progress','SOURCE_TO_SILVER',sysutcdatetime())",
+													"type": "Expression"
+												}
+											}
+										],
+										"scriptBlockExecutionTimeout": "02:00:00"
+									}
+								},
+								{
+									"name": "Update Fail Status",
+									"type": "Script",
+									"dependsOn": [
+										{
+											"activity": "Ingest From Source To Silver",
+											"dependencyConditions": [
+												"Failed"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 2,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"linkedServiceName": {
+										"referenceName": "LS_FabricSQL_ProcessDB",
+										"type": "LinkedServiceReference"
+									},
+									"typeProperties": {
+										"scripts": [
+											{
+												"type": "Query",
+												"text": {
+													"value": "UPDATE dbo.audit_log\nset status='FAILED',end_time=sysutcdatetime()\nwhere adf_run_id='@{pipeline().parameters.adf_run_id}' and table_id=@{item().table_id}",
+													"type": "Expression"
+												}
+											}
+										],
+										"scriptBlockExecutionTimeout": "02:00:00"
+									}
+								},
+								{
+									"name": "Fail1",
+									"type": "Fail",
+									"dependsOn": [
+										{
+											"activity": "Update Fail Status",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"message": "500",
+										"errorCode": "The inner pipeline failed"
+									}
+								}
+							]
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"parameters": {
+					"source_system": {
+						"type": "string",
+						"defaultValue": "GitHub"
+					},
+					"adf_run_id": {
+						"type": "string",
+						"defaultValue": "a99"
+					}
+				},
+				"folder": {
+					"name": "SAW_GITHUB"
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/pipelines/PL_SOURCE_TO_SILVER_INNER_SAW_GITHUB')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/PL_SILVER_GOLD_MAIN_GITHUB')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "Read Table From Source",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 2,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": {
+									"value": "select table_id ,gold_table_name from dbo.table_config where is_active=1 and stage='SILVER_TO_GOLD' and table_type='@{pipeline().parameters.table_type}'",
+									"type": "Expression"
+								},
+								"queryTimeout": "02:00:00",
+								"partitionOption": "None"
+							},
+							"dataset": {
+								"referenceName": "DS_FabricSQL_ProcessDB",
+								"type": "DatasetReference",
+								"parameters": {}
+							},
+							"firstRowOnly": false
+						}
+					},
+					{
+						"name": "Ingest All Table",
+						"type": "ForEach",
+						"dependsOn": [
+							{
+								"activity": "Getting All Notebooks IDs",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('Read Table From Source').output.value",
+								"type": "Expression"
+							},
+							"isSequential": false,
+							"activities": [
+								{
+									"name": "Execute Gold Notebook",
+									"type": "ExecutePipeline",
+									"dependsOn": [
+										{
+											"activity": "InSert In-Progress Status",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"pipeline": {
+											"referenceName": "PL_Execute_Gold_Notebook_GITHUB",
+											"type": "PipelineReference"
+										},
+										"waitOnCompletion": true,
+										"parameters": {
+											"p_gold_table_name": {
+												"value": "@item().gold_table_name",
+												"type": "Expression"
+											},
+											"p_notebooks": {
+												"value": "@activity('Getting All Notebooks IDs').output.value",
+												"type": "Expression"
+											},
+											"adf_run_id": {
+												"value": "@pipeline().parameters.adf_run_id",
+												"type": "Expression"
+											},
+											"table_id": {
+												"value": "@item().table_id",
+												"type": "Expression"
+											}
+										}
+									}
+								},
+								{
+									"name": "InSert In-Progress Status",
+									"type": "Script",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 2,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"linkedServiceName": {
+										"referenceName": "LS_FabricSQL_ProcessDB",
+										"type": "LinkedServiceReference"
+									},
+									"typeProperties": {
+										"scripts": [
+											{
+												"type": "Query",
+												"text": {
+													"value": "INSERT INTO dbo.audit_log (adf_run_id, table_id,status,stage,start_time)\nVALUES ('@{pipeline().parameters.adf_run_id}',@{item().table_id},'In_Progress','SILVER_TO_GOLD',sysutcdatetime())",
+													"type": "Expression"
+												}
+											}
+										],
+										"scriptBlockExecutionTimeout": "02:00:00"
+									}
+								},
+								{
+									"name": "Update Fail Status",
+									"type": "Script",
+									"dependsOn": [
+										{
+											"activity": "Execute Gold Notebook",
+											"dependencyConditions": [
+												"Failed"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 2,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"linkedServiceName": {
+										"referenceName": "LS_FabricSQL_ProcessDB",
+										"type": "LinkedServiceReference"
+									},
+									"typeProperties": {
+										"scripts": [
+											{
+												"type": "Query",
+												"text": {
+													"value": "UPDATE dbo.audit_log\nSET\n    status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Gold notebook pipeline execution failed'\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND table_id = @{item().table_id}\n  AND stage = 'SILVER_TO_GOLD';",
+													"type": "Expression"
+												}
+											}
+										],
+										"scriptBlockExecutionTimeout": "02:00:00"
+									}
+								},
+								{
+									"name": "Fail Gold Notebook Pipeline",
+									"type": "Fail",
+									"dependsOn": [
+										{
+											"activity": "Update Fail Status",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"message": "Gold notebook execution failed",
+										"errorCode": "GOLD_PIPELINE_FAILED"
+									}
+								}
+							]
+						}
+					},
+					{
+						"name": "Getting All Notebooks IDs",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "Read Table From Source",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"method": "GET",
+							"headers": {},
+							"url": {
+								"value": "https://api.fabric.microsoft.com/v1/workspaces/5aa0e28e-ab58-4dd7-91b4-0b577536312a/notebooks",
+								"type": "Expression"
+							},
+							"authentication": {
+								"type": "MSI",
+								"resource": "https://api.fabric.microsoft.com"
+							}
+						}
+					},
+					{
+						"name": "Getting Notebooks ID Failed",
+						"type": "Fail",
+						"dependsOn": [
+							{
+								"activity": "Update Notebook Discovery Failed Audit",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"message": "Getting Notebooks ID Failed",
+							"errorCode": "Getting Notebooks ID Failed"
+						}
+					},
+					{
+						"name": "Update Notebook Discovery Failed Audit",
+						"type": "Script",
+						"dependsOn": [
+							{
+								"activity": "Getting All Notebooks IDs",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "LS_FabricSQL_ProcessDB",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "Query",
+									"text": {
+										"value": "MERGE dbo.audit_log AS tgt\nUSING\n(\n    SELECT table_id\n    FROM dbo.table_config\n    WHERE is_active = 1\n      AND stage = 'SILVER_TO_GOLD'\n      AND table_type = '@{pipeline().parameters.table_type}'\n) AS src\nON  tgt.adf_run_id = '@{pipeline().parameters.adf_run_id}'\nAND tgt.table_id = src.table_id\nAND tgt.stage = 'SILVER_TO_GOLD'\n\nWHEN MATCHED THEN\n    UPDATE SET\n        status = 'FAILED',\n        end_time = SYSUTCDATETIME(),\n        error_message = 'Failed to retrieve Fabric notebook list'\n\nWHEN NOT MATCHED THEN\n    INSERT\n    (\n        adf_run_id,\n        table_id,\n        status,\n        stage,\n        start_time,\n        end_time,\n        error_message\n    )\n    VALUES\n    (\n        '@{pipeline().parameters.adf_run_id}',\n        src.table_id,\n        'FAILED',\n        'SILVER_TO_GOLD',\n        SYSUTCDATETIME(),\n        SYSUTCDATETIME(),\n        'Failed to retrieve Fabric notebook list'\n    );",
+										"type": "Expression"
+									}
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					},
+					{
+						"name": "Update Gold Config Lookup Failed Audit",
+						"type": "Script",
+						"dependsOn": [
+							{
+								"activity": "Read Table From Source",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "LS_FabricSQL_ProcessDB",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "Query",
+									"text": {
+										"value": "MERGE dbo.audit_log AS tgt\nUSING\n(\n    SELECT table_id\n    FROM dbo.table_config\n    WHERE is_active = 1\n      AND stage = 'SILVER_TO_GOLD'\n      AND table_type = '@{pipeline().parameters.table_type}'\n) AS src\nON  tgt.adf_run_id = '@{pipeline().parameters.adf_run_id}'\nAND tgt.table_id = src.table_id\nAND tgt.stage = 'SILVER_TO_GOLD'\n\nWHEN MATCHED THEN\n    UPDATE SET\n        status = 'FAILED',\n        end_time = SYSUTCDATETIME(),\n        error_message = 'Failed to read Gold table configuration'\n\nWHEN NOT MATCHED THEN\n    INSERT\n    (\n        adf_run_id,\n        table_id,\n        stage,\n        status,\n        start_time,\n        end_time,\n        error_message\n    )\n    VALUES\n    (\n        '@{pipeline().parameters.adf_run_id}',\n        src.table_id,\n        'SILVER_TO_GOLD',\n        'FAILED',\n        SYSUTCDATETIME(),\n        SYSUTCDATETIME(),\n        'Failed to read Gold table configuration'\n    );",
+										"type": "Expression"
+									}
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					},
+					{
+						"name": "Fail - Gold Config Lookup",
+						"type": "Fail",
+						"dependsOn": [
+							{
+								"activity": "Update Gold Config Lookup Failed Audit",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"message": "Failed to read Gold table configuration from ProcessDB",
+							"errorCode": "GOLD_CONFIG_LOOKUP_FAILED"
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"parameters": {
+					"adf_run_id": {
+						"type": "string"
+					},
+					"table_type": {
+						"type": "string"
+					}
+				},
+				"folder": {
+					"name": "SAW_GITHUB"
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/pipelines/PL_Execute_Gold_Notebook_GITHUB')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/PL_MASTER')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "Source To Silver Neon Postgres",
+						"type": "ExecutePipeline",
+						"dependsOn": [],
+						"policy": {
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "PL_SOURCE_TO_SILVER_MAIN_SAW",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {
+								"source_system": "neon_postgres",
+								"adf_run_id": {
+									"value": "@pipeline().RunId",
+									"type": "Expression"
+								}
+							}
+						}
+					},
+					{
+						"name": "Silver To Gold",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "Source To Silver Neon Postgres",
+								"dependencyConditions": [
+									"Completed"
+								]
+							},
+							{
+								"activity": "Source To Silver ADLS Csv_copy1",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "PL_SILVER_GOLD_MAIN",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {
+								"adf_run_id": {
+									"value": "@pipeline().RunId",
+									"type": "Expression"
+								}
+							}
+						}
+					},
+					{
+						"name": "Source To Silver ADLS Csv_copy1",
+						"type": "ExecutePipeline",
+						"dependsOn": [],
+						"policy": {
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "PL_SOURCE_TO_SILVER_MAIN_SAW",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {
+								"source_system": "adls_csv",
+								"adf_run_id": {
+									"value": "@pipeline().RunId",
+									"type": "Expression"
+								}
+							}
+						}
+					},
+					{
+						"name": "Send Mail",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "Silver To Gold",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "PL_SEND_EMAIL",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {
+								"adf_run_id": {
+									"value": "@pipeline().RunId",
+									"type": "Expression"
+								}
+							}
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"folder": {
+					"name": "SAW"
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/pipelines/PL_SOURCE_TO_SILVER_MAIN_SAW')]",
+				"[concat(variables('factoryId'), '/pipelines/PL_SEND_EMAIL')]"
+			]
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/PL_MASTER_GITHUB')]",
 			"type": "Microsoft.DataFactory/factories/pipelines",
 			"apiVersion": "2018-06-01",
@@ -2945,137 +3951,6 @@
 				"[concat(variables('factoryId'), '/pipelines/PL_SOURCE_TO_SILVER_MAIN_SAW_GITHUB')]",
 				"[concat(variables('factoryId'), '/pipelines/PL_SILVER_GOLD_MAIN_GITHUB')]",
 				"[concat(variables('factoryId'), '/pipelines/PL_DATASET_REFRESH')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/PL_MASTER')]",
-			"type": "Microsoft.DataFactory/factories/pipelines",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"activities": [
-					{
-						"name": "Source To Silver Neon Postgres",
-						"type": "ExecutePipeline",
-						"dependsOn": [],
-						"policy": {
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"pipeline": {
-								"referenceName": "PL_SOURCE_TO_SILVER_MAIN_SAW",
-								"type": "PipelineReference"
-							},
-							"waitOnCompletion": true,
-							"parameters": {
-								"source_system": "neon_postgres",
-								"adf_run_id": {
-									"value": "@pipeline().RunId",
-									"type": "Expression"
-								}
-							}
-						}
-					},
-					{
-						"name": "Silver To Gold",
-						"type": "ExecutePipeline",
-						"dependsOn": [
-							{
-								"activity": "Source To Silver Neon Postgres",
-								"dependencyConditions": [
-									"Completed"
-								]
-							},
-							{
-								"activity": "Source To Silver ADLS Csv_copy1",
-								"dependencyConditions": [
-									"Completed"
-								]
-							}
-						],
-						"policy": {
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"pipeline": {
-								"referenceName": "PL_SILVER_GOLD_MAIN",
-								"type": "PipelineReference"
-							},
-							"waitOnCompletion": true,
-							"parameters": {
-								"adf_run_id": {
-									"value": "@pipeline().RunId",
-									"type": "Expression"
-								}
-							}
-						}
-					},
-					{
-						"name": "Source To Silver ADLS Csv_copy1",
-						"type": "ExecutePipeline",
-						"dependsOn": [],
-						"policy": {
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"pipeline": {
-								"referenceName": "PL_SOURCE_TO_SILVER_MAIN_SAW",
-								"type": "PipelineReference"
-							},
-							"waitOnCompletion": true,
-							"parameters": {
-								"source_system": "adls_csv",
-								"adf_run_id": {
-									"value": "@pipeline().RunId",
-									"type": "Expression"
-								}
-							}
-						}
-					},
-					{
-						"name": "Send Mail",
-						"type": "ExecutePipeline",
-						"dependsOn": [
-							{
-								"activity": "Silver To Gold",
-								"dependencyConditions": [
-									"Completed"
-								]
-							}
-						],
-						"policy": {
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"pipeline": {
-								"referenceName": "PL_SEND_EMAIL",
-								"type": "PipelineReference"
-							},
-							"waitOnCompletion": true,
-							"parameters": {
-								"adf_run_id": {
-									"value": "@pipeline().RunId",
-									"type": "Expression"
-								}
-							}
-						}
-					}
-				],
-				"policy": {
-					"elapsedTimeMetric": {}
-				},
-				"folder": {
-					"name": "SAW"
-				},
-				"annotations": []
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/pipelines/PL_SOURCE_TO_SILVER_MAIN_SAW')]",
-				"[concat(variables('factoryId'), '/pipelines/PL_SILVER_GOLD_MAIN')]",
-				"[concat(variables('factoryId'), '/pipelines/PL_SEND_EMAIL')]"
 			]
 		}
 	]

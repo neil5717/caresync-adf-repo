@@ -7,10 +7,6 @@
 			"metadata": "Data Factory name",
 			"defaultValue": "adf-caresync-saw"
 		},
-		"LS_FabricSQL_ProcessDB_servicePrincipalCredential": {
-			"type": "secureString",
-			"metadata": "Secure string for 'servicePrincipalCredential' of 'LS_FabricSQL_ProcessDB'"
-		},
 		"LS_JSON_accountKey": {
 			"type": "secureString",
 			"metadata": "Secure string for 'accountKey' of 'LS_JSON'"
@@ -106,26 +102,11 @@
 					"factoryName": {
 						"value": "[parameters('factoryName')]"
 					},
-					"LS_FabricSQL_ProcessDB_servicePrincipalCredential": {
-						"value": "[parameters('LS_FabricSQL_ProcessDB_servicePrincipalCredential')]"
-					},
 					"LS_JSON_accountKey": {
 						"value": "[parameters('LS_JSON_accountKey')]"
 					},
 					"LS_ADLS_properties_typeProperties_url": {
 						"value": "[parameters('LS_ADLS_properties_typeProperties_url')]"
-					},
-					"LS_FabricSQL_ProcessDB_properties_typeProperties_server": {
-						"value": "[parameters('LS_FabricSQL_ProcessDB_properties_typeProperties_server')]"
-					},
-					"LS_FabricSQL_ProcessDB_properties_typeProperties_database": {
-						"value": "[parameters('LS_FabricSQL_ProcessDB_properties_typeProperties_database')]"
-					},
-					"LS_FabricSQL_ProcessDB_properties_typeProperties_servicePrincipalId": {
-						"value": "[parameters('LS_FabricSQL_ProcessDB_properties_typeProperties_servicePrincipalId')]"
-					},
-					"LS_FabricSQL_ProcessDB_properties_typeProperties_tenant": {
-						"value": "[parameters('LS_FabricSQL_ProcessDB_properties_typeProperties_tenant')]"
 					},
 					"LS_JSON_properties_typeProperties_url": {
 						"value": "[parameters('LS_JSON_properties_typeProperties_url')]"
@@ -150,6 +131,18 @@
 					},
 					"LS_AzureSqlDatabase_properties_typeProperties_userName": {
 						"value": "[parameters('LS_AzureSqlDatabase_properties_typeProperties_userName')]"
+					},
+					"LS_FabricSQL_ProcessDB_properties_typeProperties_server": {
+						"value": "[parameters('LS_FabricSQL_ProcessDB_properties_typeProperties_server')]"
+					},
+					"LS_FabricSQL_ProcessDB_properties_typeProperties_database": {
+						"value": "[parameters('LS_FabricSQL_ProcessDB_properties_typeProperties_database')]"
+					},
+					"LS_FabricSQL_ProcessDB_properties_typeProperties_servicePrincipalId": {
+						"value": "[parameters('LS_FabricSQL_ProcessDB_properties_typeProperties_servicePrincipalId')]"
+					},
+					"LS_FabricSQL_ProcessDB_properties_typeProperties_tenant": {
+						"value": "[parameters('LS_FabricSQL_ProcessDB_properties_typeProperties_tenant')]"
 					},
 					"LS_PostgreSQL_properties_typeProperties_server": {
 						"value": "[parameters('LS_PostgreSQL_properties_typeProperties_server')]"
