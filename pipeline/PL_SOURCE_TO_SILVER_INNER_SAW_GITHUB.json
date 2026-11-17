@@ -232,7 +232,7 @@
 				"type": "WebActivity",
 				"dependsOn": [
 					{
-						"activity": "Landing to Bronze",
+						"activity": "Condition Check Bronze NB Complete",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -303,7 +303,7 @@
 				"type": "WebActivity",
 				"dependsOn": [
 					{
-						"activity": "Bronze to Silver",
+						"activity": "Condition Check Silver NB Complete",
 						"dependencyConditions": [
 							"Succeeded"
 						]
@@ -363,6 +363,198 @@
 						}
 					],
 					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Until_Bronze_Notebook_Completion",
+				"type": "Until",
+				"dependsOn": [
+					{
+						"activity": "Landing to Bronze",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@or(\n    equals(activity('Get_Notebook_Status landing_to_bronze').output.status,'Completed'),\n    equals(activity('Get_Notebook_Status landing_to_bronze').output.status,'Failed')\n)",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "Get_Notebook_Status landing_to_bronze",
+							"type": "WebActivity",
+							"dependsOn": [
+								{
+									"activity": "Wait for bronze NB to complete",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"method": "GET",
+								"url": {
+									"value": "@concat(\n    'https://api.fabric.microsoft.com/v1/workspaces/5aa0e28e-ab58-4dd7-91b4-0b577536312a/notebooks/3377da5b-cb41-4b90-baa6-e3e657ededa1/jobs/execute/instances/',\n    activity('Landing to Bronze').output.id,\n    '?beta=true'\n)",
+									"type": "Expression"
+								},
+								"authentication": {
+									"type": "MSI",
+									"resource": "https://api.fabric.microsoft.com"
+								}
+							}
+						},
+						{
+							"name": "Wait for bronze NB to complete",
+							"type": "Wait",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"waitTimeInSeconds": 60
+							}
+						}
+					],
+					"timeout": "0.00:59:00"
+				}
+			},
+			{
+				"name": "Condition Check Bronze NB Complete",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "Until_Bronze_Notebook_Completion",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@equals(activity('Get_Notebook_Status landing_to_bronze').output.status,'Completed')",
+						"type": "Expression"
+					},
+					"ifFalseActivities": [
+						{
+							"name": "Fail Bronze Notebook",
+							"type": "Fail",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"message": {
+									"value": "@concat('Bronze notebook failed for table id: ', pipeline().parameters.table_id)",
+									"type": "Expression"
+								},
+								"errorCode": "BRONZE_NOTEBOOK_FAILED"
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Until_SIlver Notebook_Completion",
+				"type": "Until",
+				"dependsOn": [
+					{
+						"activity": "Bronze to Silver",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@or(\n    equals(activity('Get_Notebook_Status_bronze_to_silver').output.status,'Completed'),\n    equals(activity('Get_Notebook_Status_bronze_to_silver').output.status,'Failed')\n)",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "Get_Notebook_Status_bronze_to_silver",
+							"type": "WebActivity",
+							"dependsOn": [
+								{
+									"activity": "Wait for silver NB to complete",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"method": "GET",
+								"url": {
+									"value": "@concat(\n    'https://api.fabric.microsoft.com/v1/workspaces/5aa0e28e-ab58-4dd7-91b4-0b577536312a/notebooks/05d8c62e-1da9-452f-853d-89706bfdb1e9/jobs/execute/instances/',\n    activity('Bronze to Silver').output.id,\n    '?beta=true'\n)",
+									"type": "Expression"
+								},
+								"authentication": {
+									"type": "MSI",
+									"resource": "https://api.fabric.microsoft.com"
+								}
+							}
+						},
+						{
+							"name": "Wait for silver NB to complete",
+							"type": "Wait",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"waitTimeInSeconds": 60
+							}
+						}
+					],
+					"timeout": "0.00:59:00"
+				}
+			},
+			{
+				"name": "Condition Check Silver NB Complete",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "Until_SIlver Notebook_Completion",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@equals(activity('Get_Notebook_Status_bronze_to_silver').output.status,'Completed')",
+						"type": "Expression"
+					},
+					"ifFalseActivities": [
+						{
+							"name": "Fail Silver Notebook",
+							"type": "Fail",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"message": {
+									"value": "@concat('Silver notebook failed table id : ', pipeline().parameters.table_id)",
+									"type": "Expression"
+								},
+								"errorCode": "SILVER_NOTEBOOK_FAILED"
+							}
+						}
+					]
 				}
 			}
 		],
