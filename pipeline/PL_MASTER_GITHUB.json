@@ -32,7 +32,7 @@
 					{
 						"activity": "Source To Silver GitHub",
 						"dependencyConditions": [
-							"Completed"
+							"Succeeded"
 						]
 					}
 				],
