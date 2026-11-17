@@ -13,22 +13,6 @@
 	},
 	"resources": [
 		{
-			"name": "[concat(parameters('factoryName'), '/DS_AzureSqlTable')]",
-			"type": "Microsoft.DataFactory/factories/datasets",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"linkedServiceName": {
-					"referenceName": "LS_AzureSqlDatabase",
-					"type": "LinkedServiceReference"
-				},
-				"annotations": [],
-				"type": "AzureSqlTable",
-				"schema": [],
-				"typeProperties": {}
-			},
-			"dependsOn": []
-		},
-		{
 			"name": "[concat(parameters('factoryName'), '/DS_PostgreSql')]",
 			"type": "Microsoft.DataFactory/factories/datasets",
 			"apiVersion": "2018-06-01",
@@ -45,47 +29,33 @@
 			"dependsOn": []
 		},
 		{
-			"name": "[concat(parameters('factoryName'), '/PL_SILVER_GOLD_MAIN_GITHUB')]",
+			"name": "[concat(parameters('factoryName'), '/PL_Execute_Gold_Notebook_GITHUB')]",
 			"type": "Microsoft.DataFactory/factories/pipelines",
 			"apiVersion": "2018-06-01",
 			"properties": {
 				"activities": [
 					{
-						"name": "Read Table From Source",
-						"type": "Lookup",
+						"name": "Filter Notebook",
+						"type": "Filter",
 						"dependsOn": [],
-						"policy": {
-							"timeout": "0.12:00:00",
-							"retry": 2,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
 						"userProperties": [],
 						"typeProperties": {
-							"source": {
-								"type": "AzureSqlSource",
-								"sqlReaderQuery": {
-									"value": "select table_id ,gold_table_name from dbo.table_config where is_active=1 and stage='SILVER_TO_GOLD' and table_type='@{pipeline().parameters.table_type}'",
-									"type": "Expression"
-								},
-								"queryTimeout": "02:00:00",
-								"partitionOption": "None"
+							"items": {
+								"value": "@pipeline().parameters.p_notebooks",
+								"type": "Expression"
 							},
-							"dataset": {
-								"referenceName": "DS_FabricSQL_ProcessDB",
-								"type": "DatasetReference",
-								"parameters": {}
-							},
-							"firstRowOnly": false
+							"condition": {
+								"value": "@equals(\n    toUpper(item().displayName),\n    toUpper(concat('NB_Gold_', pipeline().parameters.p_gold_table_name))\n)",
+								"type": "Expression"
+							}
 						}
 					},
 					{
-						"name": "Ingest All Table",
-						"type": "ForEach",
+						"name": "Condition Notebook Exists",
+						"type": "IfCondition",
 						"dependsOn": [
 							{
-								"activity": "Getting All Notebooks IDs",
+								"activity": "Filter Notebook",
 								"dependencyConditions": [
 									"Succeeded"
 								]
@@ -93,40 +63,76 @@
 						],
 						"userProperties": [],
 						"typeProperties": {
-							"items": {
-								"value": "@activity('Read Table From Source').output.value",
+							"expression": {
+								"value": "@greater(length(activity('Filter Notebook').output.Value), 0)",
 								"type": "Expression"
 							},
-							"isSequential": false,
-							"activities": [
+							"ifFalseActivities": [
 								{
-									"name": "Execute Gold Notebook",
-									"type": "ExecutePipeline",
+									"name": "Update Gold Notebook Not Found Status",
+									"type": "Script",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"linkedServiceName": {
+										"referenceName": "LS_FabricSQL_ProcessDB",
+										"type": "LinkedServiceReference"
+									},
+									"typeProperties": {
+										"scripts": [
+											{
+												"type": "Query",
+												"text": {
+													"value": "UPDATE dbo.audit_log\nSET\n    status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Gold notebook not found in workspace'\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND table_id = @{pipeline().parameters.table_id};",
+													"type": "Expression"
+												}
+											}
+										],
+										"scriptBlockExecutionTimeout": "02:00:00"
+									}
+								},
+								{
+									"name": "Fail Gold Notebook Not Found",
+									"type": "Fail",
 									"dependsOn": [
 										{
-											"activity": "InSert In-Progress Status",
+											"activity": "Update Gold Notebook Not Found Status",
 											"dependencyConditions": [
 												"Succeeded"
 											]
 										}
 									],
+									"userProperties": [],
+									"typeProperties": {
+										"message": "No matching Gold notebook found in the Fabric workspace.",
+										"errorCode": "GOLD_NOTEBOOK_NOT_FOUND"
+									}
+								}
+							],
+							"ifTrueActivities": [
+								{
+									"name": "Execute Gold Notebook Pipeline",
+									"type": "ExecutePipeline",
+									"dependsOn": [],
 									"policy": {
 										"secureInput": false
 									},
 									"userProperties": [],
 									"typeProperties": {
 										"pipeline": {
-											"referenceName": "PL_Execute_Gold_Notebook_GITHUB",
+											"referenceName": "PL_Run_Gold_Notebook",
 											"type": "PipelineReference"
 										},
 										"waitOnCompletion": true,
 										"parameters": {
 											"p_gold_table_name": {
-												"value": "@item().gold_table_name",
-												"type": "Expression"
-											},
-											"p_notebooks": {
-												"value": "@activity('Getting All Notebooks IDs').output.value",
+												"value": "@pipeline().parameters.p_gold_table_name",
 												"type": "Expression"
 											},
 											"adf_run_id": {
@@ -134,127 +140,17 @@
 												"type": "Expression"
 											},
 											"table_id": {
-												"value": "@item().table_id",
+												"value": "@pipeline().parameters.table_id",
+												"type": "Expression"
+											},
+											"p_notebook_id": {
+												"value": "@activity('Filter Notebook').output.Value[0].id",
 												"type": "Expression"
 											}
 										}
 									}
-								},
-								{
-									"name": "InSert In-Progress Status",
-									"type": "Script",
-									"dependsOn": [],
-									"policy": {
-										"timeout": "0.12:00:00",
-										"retry": 2,
-										"retryIntervalInSeconds": 30,
-										"secureOutput": false,
-										"secureInput": false
-									},
-									"userProperties": [],
-									"linkedServiceName": {
-										"referenceName": "LS_FabricSQL_ProcessDB",
-										"type": "LinkedServiceReference"
-									},
-									"typeProperties": {
-										"scripts": [
-											{
-												"type": "Query",
-												"text": {
-													"value": "INSERT INTO dbo.audit_log (adf_run_id, table_id,status,stage,start_time)\nVALUES ('@{pipeline().parameters.adf_run_id}',@{item().table_id},'In_Progress','SILVER_TO_GOLD',sysutcdatetime())",
-													"type": "Expression"
-												}
-											}
-										],
-										"scriptBlockExecutionTimeout": "02:00:00"
-									}
-								},
-								{
-									"name": "Update Fail Status",
-									"type": "Script",
-									"dependsOn": [
-										{
-											"activity": "Execute Gold Notebook",
-											"dependencyConditions": [
-												"Failed"
-											]
-										}
-									],
-									"policy": {
-										"timeout": "0.12:00:00",
-										"retry": 2,
-										"retryIntervalInSeconds": 30,
-										"secureOutput": false,
-										"secureInput": false
-									},
-									"userProperties": [],
-									"linkedServiceName": {
-										"referenceName": "LS_FabricSQL_ProcessDB",
-										"type": "LinkedServiceReference"
-									},
-									"typeProperties": {
-										"scripts": [
-											{
-												"type": "Query",
-												"text": {
-													"value": "UPDATE dbo.audit_log\nset status='FAILED',end_time=sysutcdatetime()\nwhere adf_run_id='@{pipeline().parameters.adf_run_id}' and table_id=@{item().table_id}",
-													"type": "Expression"
-												}
-											}
-										],
-										"scriptBlockExecutionTimeout": "02:00:00"
-									}
-								},
-								{
-									"name": "Fail1",
-									"type": "Fail",
-									"dependsOn": [
-										{
-											"activity": "Execute Gold Notebook",
-											"dependencyConditions": [
-												"Failed"
-											]
-										}
-									],
-									"userProperties": [],
-									"typeProperties": {
-										"message": "500",
-										"errorCode": "The inner pipeline failed"
-									}
 								}
 							]
-						}
-					},
-					{
-						"name": "Getting All Notebooks IDs",
-						"type": "WebActivity",
-						"dependsOn": [
-							{
-								"activity": "Read Table From Source",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
-						"policy": {
-							"timeout": "0.12:00:00",
-							"retry": 0,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"method": "GET",
-							"headers": {},
-							"url": {
-								"value": "https://api.fabric.microsoft.com/v1/workspaces/5aa0e28e-ab58-4dd7-91b4-0b577536312a/notebooks",
-								"type": "Expression"
-							},
-							"authentication": {
-								"type": "MSI",
-								"resource": "https://api.fabric.microsoft.com"
-							}
 						}
 					}
 				],
@@ -262,11 +158,22 @@
 					"elapsedTimeMetric": {}
 				},
 				"parameters": {
+					"p_gold_table_name": {
+						"type": "string"
+					},
+					"p_notebooks": {
+						"type": "array"
+					},
 					"adf_run_id": {
 						"type": "string"
 					},
-					"table_type": {
+					"table_id": {
 						"type": "string"
+					}
+				},
+				"variables": {
+					"v_job_status_url": {
+						"type": "String"
 					}
 				},
 				"folder": {
@@ -594,9 +501,7 @@
 				},
 				"annotations": []
 			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/datasets/DS_AzureSqlTable')]"
-			]
+			"dependsOn": []
 		},
 		{
 			"name": "[concat(parameters('factoryName'), '/PL_SOURCE_TO_SILVER_INNER')]",
@@ -860,7 +765,6 @@
 				"annotations": []
 			},
 			"dependsOn": [
-				"[concat(variables('factoryId'), '/datasets/DS_AzureSqlTable')]",
 				"[concat(variables('factoryId'), '/datasets/DS_PostgreSql')]"
 			]
 		},
@@ -1368,7 +1272,6 @@
 				"annotations": []
 			},
 			"dependsOn": [
-				"[concat(variables('factoryId'), '/datasets/DS_AzureSqlTable')]",
 				"[concat(variables('factoryId'), '/datasets/DS_PostgreSql')]"
 			]
 		},
@@ -1638,6 +1541,257 @@
 			]
 		},
 		{
+			"name": "[concat(parameters('factoryName'), '/PL_SILVER_GOLD_MAIN_GITHUB')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "Read Table From Source",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 2,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": {
+									"value": "select table_id ,gold_table_name from dbo.table_config where is_active=1 and stage='SILVER_TO_GOLD' and table_type='@{pipeline().parameters.table_type}'",
+									"type": "Expression"
+								},
+								"queryTimeout": "02:00:00",
+								"partitionOption": "None"
+							},
+							"dataset": {
+								"referenceName": "DS_FabricSQL_ProcessDB",
+								"type": "DatasetReference",
+								"parameters": {}
+							},
+							"firstRowOnly": false
+						}
+					},
+					{
+						"name": "Ingest All Table",
+						"type": "ForEach",
+						"dependsOn": [
+							{
+								"activity": "Getting All Notebooks IDs",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('Read Table From Source').output.value",
+								"type": "Expression"
+							},
+							"isSequential": false,
+							"activities": [
+								{
+									"name": "Execute Gold Notebook",
+									"type": "ExecutePipeline",
+									"dependsOn": [
+										{
+											"activity": "InSert In-Progress Status",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"pipeline": {
+											"referenceName": "PL_Execute_Gold_Notebook_GITHUB",
+											"type": "PipelineReference"
+										},
+										"waitOnCompletion": true,
+										"parameters": {
+											"p_gold_table_name": {
+												"value": "@item().gold_table_name",
+												"type": "Expression"
+											},
+											"p_notebooks": {
+												"value": "@activity('Getting All Notebooks IDs').output.value",
+												"type": "Expression"
+											},
+											"adf_run_id": {
+												"value": "@pipeline().parameters.adf_run_id",
+												"type": "Expression"
+											},
+											"table_id": {
+												"value": "@item().table_id",
+												"type": "Expression"
+											}
+										}
+									}
+								},
+								{
+									"name": "InSert In-Progress Status",
+									"type": "Script",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 2,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"linkedServiceName": {
+										"referenceName": "LS_FabricSQL_ProcessDB",
+										"type": "LinkedServiceReference"
+									},
+									"typeProperties": {
+										"scripts": [
+											{
+												"type": "Query",
+												"text": {
+													"value": "INSERT INTO dbo.audit_log (adf_run_id, table_id,status,stage,start_time)\nVALUES ('@{pipeline().parameters.adf_run_id}',@{item().table_id},'In_Progress','SILVER_TO_GOLD',sysutcdatetime())",
+													"type": "Expression"
+												}
+											}
+										],
+										"scriptBlockExecutionTimeout": "02:00:00"
+									}
+								},
+								{
+									"name": "Update Fail Status",
+									"type": "Script",
+									"dependsOn": [
+										{
+											"activity": "Execute Gold Notebook",
+											"dependencyConditions": [
+												"Failed"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 2,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"linkedServiceName": {
+										"referenceName": "LS_FabricSQL_ProcessDB",
+										"type": "LinkedServiceReference"
+									},
+									"typeProperties": {
+										"scripts": [
+											{
+												"type": "Query",
+												"text": {
+													"value": "UPDATE dbo.audit_log\nSET\n    status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Gold notebook pipeline execution failed'\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND table_id = @{item().table_id}\n  AND stage = 'SILVER_TO_GOLD';",
+													"type": "Expression"
+												}
+											}
+										],
+										"scriptBlockExecutionTimeout": "02:00:00"
+									}
+								},
+								{
+									"name": "Fail Gold Notebook Pipeline",
+									"type": "Fail",
+									"dependsOn": [
+										{
+											"activity": "Update Fail Status",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"message": "Gold notebook execution failed",
+										"errorCode": "GOLD_PIPELINE_FAILED"
+									}
+								}
+							]
+						}
+					},
+					{
+						"name": "Getting All Notebooks IDs",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "Read Table From Source",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"method": "GET",
+							"headers": {},
+							"url": {
+								"value": "https://api.fabric.microsoft.com/v1/workspaces/5aa0e28e-ab58-4dd7-91b4-0b577536312a/notebooks",
+								"type": "Expression"
+							},
+							"authentication": {
+								"type": "MSI",
+								"resource": "https://api.fabric.microsoft.com"
+							}
+						}
+					},
+					{
+						"name": "Getting Notebooks ID Failed",
+						"type": "Fail",
+						"dependsOn": [
+							{
+								"activity": "Getting All Notebooks IDs",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"message": "Getting Notebooks ID Failed",
+							"errorCode": "Getting Notebooks ID Failed"
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {}
+				},
+				"parameters": {
+					"adf_run_id": {
+						"type": "string"
+					},
+					"table_type": {
+						"type": "string"
+					}
+				},
+				"folder": {
+					"name": "SAW_GITHUB"
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/pipelines/PL_Execute_Gold_Notebook_GITHUB')]"
+			]
+		},
+		{
 			"name": "[concat(parameters('factoryName'), '/PL_SEND_EMAIL')]",
 			"type": "Microsoft.DataFactory/factories/pipelines",
 			"apiVersion": "2018-06-01",
@@ -1859,9 +2013,7 @@
 				},
 				"annotations": []
 			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/datasets/DS_AzureSqlTable')]"
-			]
+			"dependsOn": []
 		},
 		{
 			"name": "[concat(parameters('factoryName'), '/PL_SOURCE_TO_SILVER_MAIN')]",
@@ -2040,7 +2192,6 @@
 				"annotations": []
 			},
 			"dependsOn": [
-				"[concat(variables('factoryId'), '/datasets/DS_AzureSqlTable')]",
 				"[concat(variables('factoryId'), '/pipelines/PL_SOURCE_TO_SILVER_INNER')]"
 			]
 		},
@@ -2237,7 +2388,6 @@
 				"annotations": []
 			},
 			"dependsOn": [
-				"[concat(variables('factoryId'), '/datasets/DS_AzureSqlTable')]",
 				"[concat(variables('factoryId'), '/pipelines/PL_SOURCE_TO_SILVER_INNER_SAW')]"
 			]
 		},
@@ -2277,7 +2427,7 @@
 							{
 								"activity": "Source To Silver GitHub",
 								"dependencyConditions": [
-									"Completed"
+									"Succeeded"
 								]
 							}
 						],

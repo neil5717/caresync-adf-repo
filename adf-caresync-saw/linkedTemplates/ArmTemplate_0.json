@@ -524,38 +524,15 @@
 			]
 		},
 		{
-			"name": "[concat(parameters('factoryName'), '/PL_Execute_Gold_Notebook_GITHUB')]",
+			"name": "[concat(parameters('factoryName'), '/PL_Run_Gold_Notebook')]",
 			"type": "Microsoft.DataFactory/factories/pipelines",
 			"apiVersion": "2018-06-01",
 			"properties": {
 				"activities": [
 					{
-						"name": "Filter1",
-						"type": "Filter",
-						"dependsOn": [],
-						"userProperties": [],
-						"typeProperties": {
-							"items": {
-								"value": "@pipeline().parameters.p_notebooks",
-								"type": "Expression"
-							},
-							"condition": {
-								"value": "@equals(\n    toUpper(item().displayName),\n    toUpper(concat('NB_Gold_', pipeline().parameters.p_gold_table_name))\n)",
-								"type": "Expression"
-							}
-						}
-					},
-					{
 						"name": "Run Gold Notebook",
 						"type": "WebActivity",
-						"dependsOn": [
-							{
-								"activity": "Filter1",
-								"dependencyConditions": [
-									"Succeeded"
-								]
-							}
-						],
+						"dependsOn": [],
 						"policy": {
 							"timeout": "0.12:00:00",
 							"retry": 0,
@@ -570,7 +547,7 @@
 								"Content-Type": "application/json"
 							},
 							"url": {
-								"value": "https://api.fabric.microsoft.com/v1/workspaces/5aa0e28e-ab58-4dd7-91b4-0b577536312a/notebooks/@{activity('Filter1').output.Value[0].id}/jobs/execute/instances?jobType=RunNotebook",
+								"value": "@concat(\n'https://api.fabric.microsoft.com/v1/workspaces/5aa0e28e-ab58-4dd7-91b4-0b577536312a/notebooks/',\npipeline().parameters.p_notebook_id,\n'/jobs/execute/instances?jobType=RunNotebook'\n)",
 								"type": "Expression"
 							},
 							"body": {
@@ -624,7 +601,7 @@
 										"method": "GET",
 										"headers": {},
 										"url": {
-											"value": "@concat(\n'https://api.fabric.microsoft.com/v1/workspaces/5aa0e28e-ab58-4dd7-91b4-0b577536312a/notebooks/',\nactivity('Filter1').output.Value[0].id,\n'/jobs/execute/instances/',\nactivity('Run Gold Notebook').output.id,\n'?beta=true'\n)",
+											"value": "@concat(\n'https://api.fabric.microsoft.com/v1/workspaces/5aa0e28e-ab58-4dd7-91b4-0b577536312a/notebooks/',\npipeline().parameters.p_notebook_id,\n'/jobs/execute/instances/',\nactivity('Run Gold Notebook').output.id,\n'?beta=true'\n)",
 											"type": "Expression"
 										},
 										"authentication": {
@@ -643,11 +620,11 @@
 									}
 								}
 							],
-							"timeout": "0.00:30:00"
+							"timeout": "0.00:59:00"
 						}
 					},
 					{
-						"name": "If Condition1",
+						"name": "Condition Check for GOld NB Status",
 						"type": "IfCondition",
 						"dependsOn": [
 							{
@@ -665,9 +642,16 @@
 							},
 							"ifFalseActivities": [
 								{
-									"name": "Fail1",
+									"name": "Fail Gold Notebook Execution",
 									"type": "Fail",
-									"dependsOn": [],
+									"dependsOn": [
+										{
+											"activity": "Update Failed Gold NB Status",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
 									"userProperties": [],
 									"typeProperties": {
 										"message": {
@@ -675,6 +659,35 @@
 											"type": "Expression"
 										},
 										"errorCode": "GOLD_NOTEBOOK_FAILED"
+									}
+								},
+								{
+									"name": "Update Failed Gold NB Status",
+									"type": "Script",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"linkedServiceName": {
+										"referenceName": "LS_FabricSQL_ProcessDB",
+										"type": "LinkedServiceReference"
+									},
+									"typeProperties": {
+										"scripts": [
+											{
+												"type": "Query",
+												"text": {
+													"value": "UPDATE dbo.audit_log\nSET\n    status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Gold notebook execution failed'\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND table_id = @{pipeline().parameters.table_id};",
+													"type": "Expression"
+												}
+											}
+										],
+										"scriptBlockExecutionTimeout": "02:00:00"
 									}
 								}
 							]
@@ -721,7 +734,7 @@
 						"type": "WebActivity",
 						"dependsOn": [
 							{
-								"activity": "If Condition1",
+								"activity": "Condition Check for GOld NB Status",
 								"dependencyConditions": [
 									"Succeeded"
 								]
@@ -739,13 +752,119 @@
 							"method": "GET",
 							"headers": {},
 							"url": {
-								"value": "@concat(\n'https://api.fabric.microsoft.com/v1/workspaces/5aa0e28e-ab58-4dd7-91b4-0b577536312a/notebooks/',\nactivity('Filter1').output.Value[0].id,\n'/jobs/execute/instances/',\nactivity('Run Gold Notebook').output.id,\n'?beta=true'\n)",
+								"value": "@concat(\n'https://api.fabric.microsoft.com/v1/workspaces/5aa0e28e-ab58-4dd7-91b4-0b577536312a/notebooks/',\npipeline().parameters.p_notebook_id,\n'/jobs/execute/instances/',\nactivity('Run Gold Notebook').output.id,\n'?beta=true'\n)",
 								"type": "Expression"
 							},
 							"authentication": {
 								"type": "MSI",
 								"resource": "https://api.fabric.microsoft.com"
 							}
+						}
+					},
+					{
+						"name": "Update Gold Polling Failed Status",
+						"type": "Script",
+						"dependsOn": [
+							{
+								"activity": "Until_Notebook_Completion",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "LS_FabricSQL_ProcessDB",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "Query",
+									"text": {
+										"value": "UPDATE dbo.audit_log\nSET\n    status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Gold notebook polling failed or timed out'\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND table_id = @{pipeline().parameters.table_id};",
+										"type": "Expression"
+									}
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					},
+					{
+						"name": "Fail Gold Notebook Polling",
+						"type": "Fail",
+						"dependsOn": [
+							{
+								"activity": "Update Gold Polling Failed Status",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"message": "Gold notebook polling failed or timed out",
+							"errorCode": "GOLD_POLLING_FAILED"
+						}
+					},
+					{
+						"name": "Update Gold Trigger Failed Status",
+						"type": "Script",
+						"dependsOn": [
+							{
+								"activity": "Run Gold Notebook",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "LS_FabricSQL_ProcessDB",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "Query",
+									"text": {
+										"value": "UPDATE dbo.audit_log\nSET\n    status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Failed to trigger Gold notebook execution'\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND table_id = @{pipeline().parameters.table_id};",
+										"type": "Expression"
+									}
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					},
+					{
+						"name": "Fail Gold Notebook Trigger",
+						"type": "Fail",
+						"dependsOn": [
+							{
+								"activity": "Update Gold Trigger Failed Status",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"message": "Failed to trigger Gold notebook execution",
+							"errorCode": "GOLD_TRIGGER_FAILED"
 						}
 					}
 				],
@@ -756,19 +875,14 @@
 					"p_gold_table_name": {
 						"type": "string"
 					},
-					"p_notebooks": {
-						"type": "array"
-					},
 					"adf_run_id": {
 						"type": "string"
 					},
 					"table_id": {
 						"type": "string"
-					}
-				},
-				"variables": {
-					"v_job_status_url": {
-						"type": "String"
+					},
+					"p_notebook_id": {
+						"type": "string"
 					}
 				},
 				"folder": {
@@ -1502,7 +1616,7 @@
 						"type": "WebActivity",
 						"dependsOn": [
 							{
-								"activity": "Landing to Bronze",
+								"activity": "Condition Check Bronze NB Complete",
 								"dependencyConditions": [
 									"Succeeded"
 								]
@@ -1574,7 +1688,7 @@
 						"type": "WebActivity",
 						"dependsOn": [
 							{
-								"activity": "Bronze to Silver",
+								"activity": "Condition Check Silver NB Complete",
 								"dependencyConditions": [
 									"Succeeded"
 								]
@@ -1636,6 +1750,496 @@
 							],
 							"scriptBlockExecutionTimeout": "02:00:00"
 						}
+					},
+					{
+						"name": "Until_Bronze_Notebook_Completion",
+						"type": "Until",
+						"dependsOn": [
+							{
+								"activity": "Landing to Bronze",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@or(\n    equals(activity('Get_Notebook_Status landing_to_bronze').output.status,'Completed'),\n    equals(activity('Get_Notebook_Status landing_to_bronze').output.status,'Failed')\n)",
+								"type": "Expression"
+							},
+							"activities": [
+								{
+									"name": "Get_Notebook_Status landing_to_bronze",
+									"type": "WebActivity",
+									"dependsOn": [
+										{
+											"activity": "Wait for bronze NB to complete",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"method": "GET",
+										"headers": {},
+										"url": {
+											"value": "@concat(\n    'https://api.fabric.microsoft.com/v1/workspaces/5aa0e28e-ab58-4dd7-91b4-0b577536312a/notebooks/3377da5b-cb41-4b90-baa6-e3e657ededa1/jobs/execute/instances/',\n    activity('Landing to Bronze').output.id,\n    '?beta=true'\n)",
+											"type": "Expression"
+										},
+										"authentication": {
+											"type": "MSI",
+											"resource": "https://api.fabric.microsoft.com"
+										}
+									}
+								},
+								{
+									"name": "Wait for bronze NB to complete",
+									"type": "Wait",
+									"dependsOn": [],
+									"userProperties": [],
+									"typeProperties": {
+										"waitTimeInSeconds": 60
+									}
+								}
+							],
+							"timeout": "0.00:59:00"
+						}
+					},
+					{
+						"name": "Condition Check Bronze NB Complete",
+						"type": "IfCondition",
+						"dependsOn": [
+							{
+								"activity": "Until_Bronze_Notebook_Completion",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@equals(activity('Get_Notebook_Status landing_to_bronze').output.status,'Completed')",
+								"type": "Expression"
+							},
+							"ifFalseActivities": [
+								{
+									"name": "Fail Bronze Notebook",
+									"type": "Fail",
+									"dependsOn": [
+										{
+											"activity": "Update Failed Bronze NB Status",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"message": {
+											"value": "@concat('Bronze notebook failed for table id: ', pipeline().parameters.table_id)",
+											"type": "Expression"
+										},
+										"errorCode": "BRONZE_NOTEBOOK_FAILED"
+									}
+								},
+								{
+									"name": "Update Failed Bronze NB Status",
+									"type": "Script",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"linkedServiceName": {
+										"referenceName": "LS_FabricSQL_ProcessDB",
+										"type": "LinkedServiceReference"
+									},
+									"typeProperties": {
+										"scripts": [
+											{
+												"type": "Query",
+												"text": {
+													"value": "UPDATE dbo.audit_log\nSET\n    status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Landing to Bronze notebook failed'\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND table_id = @{pipeline().parameters.table_id};",
+													"type": "Expression"
+												}
+											}
+										],
+										"scriptBlockExecutionTimeout": "02:00:00"
+									}
+								}
+							]
+						}
+					},
+					{
+						"name": "Until_SIlver Notebook_Completion",
+						"type": "Until",
+						"dependsOn": [
+							{
+								"activity": "Bronze to Silver",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@or(\n    equals(activity('Get_Notebook_Status_bronze_to_silver').output.status,'Completed'),\n    equals(activity('Get_Notebook_Status_bronze_to_silver').output.status,'Failed')\n)",
+								"type": "Expression"
+							},
+							"activities": [
+								{
+									"name": "Get_Notebook_Status_bronze_to_silver",
+									"type": "WebActivity",
+									"dependsOn": [
+										{
+											"activity": "Wait for silver NB to complete",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"method": "GET",
+										"headers": {},
+										"url": {
+											"value": "@concat(\n    'https://api.fabric.microsoft.com/v1/workspaces/5aa0e28e-ab58-4dd7-91b4-0b577536312a/notebooks/05d8c62e-1da9-452f-853d-89706bfdb1e9/jobs/execute/instances/',\n    activity('Bronze to Silver').output.id,\n    '?beta=true'\n)",
+											"type": "Expression"
+										},
+										"authentication": {
+											"type": "MSI",
+											"resource": "https://api.fabric.microsoft.com"
+										}
+									}
+								},
+								{
+									"name": "Wait for silver NB to complete",
+									"type": "Wait",
+									"dependsOn": [],
+									"userProperties": [],
+									"typeProperties": {
+										"waitTimeInSeconds": 60
+									}
+								}
+							],
+							"timeout": "0.00:59:00"
+						}
+					},
+					{
+						"name": "Condition Check Silver NB Complete",
+						"type": "IfCondition",
+						"dependsOn": [
+							{
+								"activity": "Until_SIlver Notebook_Completion",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@equals(activity('Get_Notebook_Status_bronze_to_silver').output.status,'Completed')",
+								"type": "Expression"
+							},
+							"ifFalseActivities": [
+								{
+									"name": "Fail Silver Notebook",
+									"type": "Fail",
+									"dependsOn": [
+										{
+											"activity": "Update Failed Silver NB Status",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"message": {
+											"value": "@concat('Silver notebook failed table id : ', pipeline().parameters.table_id)",
+											"type": "Expression"
+										},
+										"errorCode": "SILVER_NOTEBOOK_FAILED"
+									}
+								},
+								{
+									"name": "Update Failed Silver NB Status",
+									"type": "Script",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"linkedServiceName": {
+										"referenceName": "LS_FabricSQL_ProcessDB",
+										"type": "LinkedServiceReference"
+									},
+									"typeProperties": {
+										"scripts": [
+											{
+												"type": "Query",
+												"text": {
+													"value": "UPDATE dbo.audit_log\nSET\n    status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Bronze to Silver notebook failed'\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND table_id = @{pipeline().parameters.table_id};",
+													"type": "Expression"
+												}
+											}
+										],
+										"scriptBlockExecutionTimeout": "02:00:00"
+									}
+								}
+							]
+						}
+					},
+					{
+						"name": "Bronze Notebook Failed",
+						"type": "Script",
+						"dependsOn": [
+							{
+								"activity": "Until_Bronze_Notebook_Completion",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "LS_FabricSQL_ProcessDB",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "Query",
+									"text": {
+										"value": "UPDATE dbo.audit_log\nSET\n    status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Bronze notebook polling failed: timeout or status API error'\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND table_id = @{pipeline().parameters.table_id};",
+										"type": "Expression"
+									}
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					},
+					{
+						"name": "Silver Notebook Failed",
+						"type": "Script",
+						"dependsOn": [
+							{
+								"activity": "Until_SIlver Notebook_Completion",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "LS_FabricSQL_ProcessDB",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "Query",
+									"text": {
+										"value": "UPDATE dbo.audit_log\nSET\n    status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Silver notebook polling failed: timeout or status API error'\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND table_id = @{pipeline().parameters.table_id};",
+										"type": "Expression"
+									}
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					},
+					{
+						"name": "Fail Bronze Polling",
+						"type": "Fail",
+						"dependsOn": [
+							{
+								"activity": "Bronze Notebook Failed",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"message": {
+								"value": "@concat(\n    'Bronze notebook polling failed for table_id: ',\n    pipeline().parameters.table_id,\n    '. Check notebook execution status, GET API response or polling timeout.'\n)",
+								"type": "Expression"
+							},
+							"errorCode": "BRONZE_POLLING_FAILED"
+						}
+					},
+					{
+						"name": "Fail Silver Polling",
+						"type": "Fail",
+						"dependsOn": [
+							{
+								"activity": "Silver Notebook Failed",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"message": {
+								"value": "@concat(\n    'Silver notebook polling failed for table_id: ',\n    pipeline().parameters.table_id,\n    '. Check notebook execution status, GET API response or polling timeout.'\n)",
+								"type": "Expression"
+							},
+							"errorCode": "SILVER_POLLING_FAILED"
+						}
+					},
+					{
+						"name": "Update Failed Bronze POST Status",
+						"type": "Script",
+						"dependsOn": [
+							{
+								"activity": "Landing to Bronze",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "LS_FabricSQL_ProcessDB",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "Query",
+									"text": {
+										"value": "UPDATE dbo.audit_log\nSET\n    status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Landing to Bronze notebook POST request failed'\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND table_id = @{pipeline().parameters.table_id};",
+										"type": "Expression"
+									}
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					},
+					{
+						"name": "Fail Bronze POST",
+						"type": "Fail",
+						"dependsOn": [
+							{
+								"activity": "Update Failed Bronze POST Status",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"message": {
+								"value": "@concat(\n    'Bronze notebook POST request failed for table_id: ',\n    pipeline().parameters.table_id,\n    '. Check Fabric API response, authentication or notebook execution request.'\n)",
+								"type": "Expression"
+							},
+							"errorCode": "BRONZE_POST_FAILED"
+						}
+					},
+					{
+						"name": "Update Failed Silver POST Status",
+						"type": "Script",
+						"dependsOn": [
+							{
+								"activity": "Bronze to Silver",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "LS_FabricSQL_ProcessDB",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "Query",
+									"text": {
+										"value": "UPDATE dbo.audit_log\nSET\n    status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Bronze to Silver notebook POST request failed'\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND table_id = @{pipeline().parameters.table_id};",
+										"type": "Expression"
+									}
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					},
+					{
+						"name": "Fail Silver POST",
+						"type": "Fail",
+						"dependsOn": [
+							{
+								"activity": "Update Failed Silver POST Status",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"message": {
+								"value": "@concat(\n    'Silver notebook POST request failed for table_id: ',\n    pipeline().parameters.table_id,\n    '. Check Fabric API response, authentication or notebook execution request.'\n)",
+								"type": "Expression"
+							},
+							"errorCode": "SILVER_POST_FAILED"
+						}
 					}
 				],
 				"policy": {
@@ -1668,60 +2272,6 @@
 				"[concat(variables('factoryId'), '/datasets/DS_RestAPI')]",
 				"[concat(variables('factoryId'), '/datasets/DS_JSON')]",
 				"[concat(variables('factoryId'), '/linkedServices/LS_FabricSQL_ProcessDB')]"
-			]
-		},
-		{
-			"name": "[concat(parameters('factoryName'), '/pipeline1')]",
-			"type": "Microsoft.DataFactory/factories/pipelines",
-			"apiVersion": "2018-06-01",
-			"properties": {
-				"activities": [
-					{
-						"name": "Read Table Details",
-						"type": "Lookup",
-						"dependsOn": [],
-						"policy": {
-							"timeout": "0.12:00:00",
-							"retry": 2,
-							"retryIntervalInSeconds": 30,
-							"secureOutput": false,
-							"secureInput": false
-						},
-						"userProperties": [],
-						"typeProperties": {
-							"source": {
-								"type": "AzureSqlSource",
-								"sqlReaderQuery": {
-									"value": "select * from dbo.table_config where table_id=@{pipeline().parameters.table_id}",
-									"type": "Expression"
-								},
-								"queryTimeout": "02:00:00",
-								"partitionOption": "None"
-							},
-							"dataset": {
-								"referenceName": "DS_FabricSQL_ProcessDB",
-								"type": "DatasetReference",
-								"parameters": {}
-							}
-						}
-					}
-				],
-				"policy": {
-					"elapsedTimeMetric": {}
-				},
-				"parameters": {
-					"table_id": {
-						"type": "string",
-						"defaultValue": "1"
-					},
-					"adf_run_id": {
-						"type": "string"
-					}
-				},
-				"annotations": []
-			},
-			"dependsOn": [
-				"[concat(variables('factoryId'), '/datasets/DS_FabricSQL_ProcessDB')]"
 			]
 		},
 		{
@@ -1904,6 +2454,24 @@
 			},
 			"dependsOn": [
 				"[concat(variables('factoryId'), '/datasets/DS_FabricSQL_ProcessDB')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DS_AzureSqlTable')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "LS_AzureSqlDatabase",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [],
+				"typeProperties": {}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/LS_AzureSqlDatabase')]"
 			]
 		}
 	]
