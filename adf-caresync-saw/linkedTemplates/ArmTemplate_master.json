@@ -67,13 +67,13 @@
 			"type": "string",
 			"defaultValue": "neondb_owner"
 		},
-		"LS_RestAPI_properties_typeProperties_url": {
-			"type": "string",
-			"defaultValue": "https://api.github.com"
-		},
 		"LS_RefreshAPI_properties_typeProperties_baseUrl": {
 			"type": "string",
 			"defaultValue": "https://caresync-kv-saw.vault.azure.net/"
+		},
+		"LS_RestAPI_properties_typeProperties_url": {
+			"type": "string",
+			"defaultValue": "https://api.github.com"
 		},
 		"containerUri": {
 			"type": "string",
@@ -114,11 +114,11 @@
 					"LS_KeyVoult_properties_typeProperties_baseUrl": {
 						"value": "[parameters('LS_KeyVoult_properties_typeProperties_baseUrl')]"
 					},
-					"LS_RestAPI_properties_typeProperties_url": {
-						"value": "[parameters('LS_RestAPI_properties_typeProperties_url')]"
-					},
 					"LS_RefreshAPI_properties_typeProperties_baseUrl": {
 						"value": "[parameters('LS_RefreshAPI_properties_typeProperties_baseUrl')]"
+					},
+					"LS_RestAPI_properties_typeProperties_url": {
+						"value": "[parameters('LS_RestAPI_properties_typeProperties_url')]"
 					},
 					"LS_AzureDatabricks_properties_typeProperties_existingClusterId": {
 						"value": "[parameters('LS_AzureDatabricks_properties_typeProperties_existingClusterId')]"
