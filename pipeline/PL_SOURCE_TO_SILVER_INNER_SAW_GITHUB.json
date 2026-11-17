@@ -740,6 +740,118 @@
 					},
 					"errorCode": "SILVER_POLLING_FAILED"
 				}
+			},
+			{
+				"name": "Update Failed Bronze POST Status",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Landing to Bronze",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "LS_FabricSQL_ProcessDB",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "Query",
+							"text": {
+								"value": "UPDATE dbo.audit_log\nSET\n    status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Landing to Bronze notebook POST request failed'\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND table_id = @{pipeline().parameters.table_id};",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Fail Bronze POST",
+				"type": "Fail",
+				"dependsOn": [
+					{
+						"activity": "Update Failed Bronze POST Status",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"message": {
+						"value": "@concat(\n    'Bronze notebook POST request failed for table_id: ',\n    pipeline().parameters.table_id,\n    '. Check Fabric API response, authentication or notebook execution request.'\n)",
+						"type": "Expression"
+					},
+					"errorCode": "BRONZE_POST_FAILED"
+				}
+			},
+			{
+				"name": "Update Failed Silver POST Status",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Bronze to Silver",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "LS_FabricSQL_ProcessDB",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "Query",
+							"text": {
+								"value": "UPDATE dbo.audit_log\nSET\n    status = 'FAILED',\n    end_time = SYSUTCDATETIME(),\n    error_message = 'Bronze to Silver notebook POST request failed'\nWHERE adf_run_id = '@{pipeline().parameters.adf_run_id}'\n  AND table_id = @{pipeline().parameters.table_id};",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			},
+			{
+				"name": "Fail Silver POST",
+				"type": "Fail",
+				"dependsOn": [
+					{
+						"activity": "Update Failed Silver POST Status",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"message": {
+						"value": "@concat(\n    'Silver notebook POST request failed for table_id: ',\n    pipeline().parameters.table_id,\n    '. Check Fabric API response, authentication or notebook execution request.'\n)",
+						"type": "Expression"
+					},
+					"errorCode": "SILVER_POST_FAILED"
+				}
 			}
 		],
 		"parameters": {
